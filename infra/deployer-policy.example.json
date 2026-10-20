@@ -2,7 +2,7 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "ApplicationAndSamStacks",
+      "Sid": "ApplicationStack",
       "Effect": "Allow",
       "Action": [
         "cloudformation:CreateStack",
@@ -24,12 +24,11 @@
       ],
       "Resource": [
         "arn:aws:cloudformation:REGION:ACCOUNT_ID:stack/STACK_NAME/*",
-        "arn:aws:cloudformation:REGION:ACCOUNT_ID:stack/aws-sam-cli-managed-default/*",
-        "arn:aws:cloudformation:REGION:ACCOUNT_ID:changeSet/*/*"
+        "arn:aws:cloudformation:REGION:ACCOUNT_ID:changeSet/portal-*/*"
       ]
     },
     {
-      "Sid": "SamTransform",
+      "Sid": "CloudFormationServerlessTransform",
       "Effect": "Allow",
       "Action": [
         "cloudformation:CreateChangeSet"
@@ -195,7 +194,7 @@
       }
     },
     {
-      "Sid": "SamDeploymentBucket",
+      "Sid": "DeploymentBucket",
       "Effect": "Allow",
       "Action": [
         "s3:CreateBucket",
@@ -214,11 +213,11 @@
         "s3:UntagResource"
       ],
       "Resource": [
-        "arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-*"
+        "arn:aws:s3:::feishu-portal-ACCOUNT_ID-REGION"
       ]
     },
     {
-      "Sid": "SamDeploymentObjects",
+      "Sid": "DeploymentObjects",
       "Effect": "Allow",
       "Action": [
         "s3:GetObject",
@@ -229,7 +228,7 @@
         "s3:ListMultipartUploadParts"
       ],
       "Resource": [
-        "arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-*/*"
+        "arn:aws:s3:::feishu-portal-ACCOUNT_ID-REGION/*"
       ]
     },
     {

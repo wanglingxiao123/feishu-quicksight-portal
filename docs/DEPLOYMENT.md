@@ -6,11 +6,11 @@
 
 | 准备什么 | 用途 |
 |---|---|
-| AWS 部署身份及目标账户、区域 | 创建 API Gateway、Lambda、DynamoDB、IAM 角色、日志资源及 SAM 制品桶 |
+| AWS 部署身份及目标账户、区域 | 创建 API Gateway、Lambda、DynamoDB、IAM 角色、日志资源及 部署代码包的 S3 桶 |
 | 同账户同区域的 QuickSight Enterprise 环境 | 提供已发布仪表盘；每位测试人员有自己的 QuickSight 用户及授权 |
 | 现有 Cognito 用户池，或已对接企业身份源的 Keycloak Realm | 验证登录身份；本项目不创建用户池、Keycloak 或企业目录 |
 | 飞书自建应用开发权限及发布审核人 | 创建应用和发布测试版本 |
-| Node.js 22.12+、npm、Git、AWS CLI v2（本文使用 2.32.0+）、AWS SAM CLI | 安装、打包和部署 |
+| Node.js 22.12+、npm、Git、AWS CLI v2（本文登录示例使用 2.32.0+） | 安装、打包和部署 |
 
 AWS 资源和 Secrets Manager 会产生费用。本项目不替你购买 QuickSight 容量套餐。部署身份需要相应 CloudFormation、制品桶、IAM、Lambda、API Gateway、DynamoDB、CloudWatch Logs 权限，以及解析指定 Secrets Manager secret 的权限；客户应按自身权限流程授权。应用的运行角色由模板单独创建，不继承部署身份权限。
 
@@ -25,9 +25,9 @@ AWS 资源和 Secrets Manager 会产生费用。本项目不替你购买 QuickSi
 ## 步骤 1：创建空的飞书企业自建应用
 
 1. 打开飞书开放平台 `https://open.feishu.cn`，选择目标企业。
-2. 进入开发者后台 → 创建企业自建应用，填写名称，例如“报表中心”。
-3. 在“凭证与基础信息”中取得 **App ID**；App Secret 只在受控本地位置使用，不发给 Agent 或贴进文档。
-4. 添加网页应用能力。应用首页、登录回调待步骤 2 获得地址后再填写；此时不用全员发布。
+2. 进入开发者后台 → 创建企业自建应用，填写名称（例如“报表中心”）、描述，并选择一个内置图标，然后点击“创建”。
+3. 在“凭证与基础信息”中取得 **App ID**；App Secret 只在受控本地文件中使用，不贴进聊天或文档。
+4. 添加网页应用能力。应用首页、登录回调待步骤 2 获得地址后再填写；此时显示“未完成必填项配置”是正常的，不保存空主页地址，也不创建发布版本。
 5. 记录发布审核人。后续先将可用范围限制在两名测试人员。
 
 **完成标志：**目标企业中已有一个自建应用，并取得其凭证。
@@ -39,6 +39,7 @@ AWS 资源和 Secrets Manager 会产生费用。本项目不替你购买 QuickSi
 ```bash
 git clone https://github.com/wanglingxiao123/feishu-quicksight-portal.git
 cd feishu-quicksight-portal
+git checkout v0.3.0
 npm ci
 cp config/example.json config.local.json
 npm run secrets:generate
@@ -92,7 +93,7 @@ npm run outputs -- --profile portal-deploy
 ```
 
 `package` 只复制运行时文件并安装生产依赖；不会上传 `.env`、本地秘密、测试记录或 Git 历史。
-`deploy` 会先确认 STS 返回的 AWS 账户与配置一致，再用 SAM 做模板检查和部署；**检查 change set 后确认创建资源**。它不会创建 Cognito/Keycloak 客户端，也不会修改 QuickSight 订阅。
+`deploy` 会先确认 STS 返回的 AWS 账户与配置一致，再用 AWS SDK 调用 CloudFormation；先核对资源计划，输入 `yes` 准备代码包，再检查变更集并输入 `yes` 执行。它不会创建 Cognito/Keycloak 客户端，也不会修改 QuickSight 订阅。
 
 记录输出：`ApplicationUrl`、`FeishuCallback`、`ReportCallback`。这就是应用地址和两个回调，不要填写字面量“ApplicationUrl”。
 
@@ -218,7 +219,7 @@ ApplicationUrl/auth/enroll/ENROLLMENT_TOKEN
 - 保留 stackName、region、account、应用客户端和 API 资源；代码变更使用同一部署命令更新。
 - 更新前保留当前 Git tag 和安全保存的 `config.local.json`。回滚时检出对应版本，使用匹配配置重新打包、审核 change set 后更新。
 - 不要为了修回调删除整个 stack。删除重建可能更换应用地址，使回调失效。
-- DynamoDB 和日志默认 Retain；删除 stack 不会自动删除它们，避免丢失授权绑定，但保留资源仍可能计费。SAM 制品桶和 Secrets Manager secret 也需单独按组织流程清理。
+- DynamoDB 和日志默认 Retain；删除 stack 不会自动删除它们，避免丢失授权绑定，但保留资源仍可能计费。部署代码包的 S3 桶和 Secrets Manager secret 也需单独按组织流程清理。
 - 改变邮箱、issuer、sub、namespace、允许邮箱域或 QuickSight 用户 PrincipalId 前，先规划身份重新绑定。自动关联和反向归属锁没有 TTL，不会随登录会话过期而消失；停用用户应由管理员将对应身份记录 `enabled` 设为 false，并在 QuickSight 侧执行相应停用。改绑必须核实两边真实身份，处理两条记录的一致性，不要仅删其中一条锁，也不要清空整张会话表。已兑换的嵌入会话仍可能持续到期。
 
 ## 常见问题

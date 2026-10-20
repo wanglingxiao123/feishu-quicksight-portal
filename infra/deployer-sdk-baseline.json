@@ -1,0 +1,152 @@
+{
+  "Policies": [
+    {
+      "Policy": {
+        "Id": "IamPolicyAutopilot",
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "cloudformation:CreateChangeSet",
+              "cloudformation:DeleteChangeSet",
+              "cloudformation:DescribeChangeSet",
+              "cloudformation:DescribeStacks",
+              "cloudformation:ExecuteChangeSet",
+              "cloudformation:TagResource",
+              "cloudformation:UntagResource"
+            ],
+            "Resource": [
+              "arn:*:cloudformation:*:*:changeSet/*/*",
+              "arn:*:cloudformation:*:*:stack/*/*",
+              "arn:*:cloudformation:*:*:stackset/*:*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "cloudformation:ListStacks",
+              "cloudformation:ValidateTemplate"
+            ],
+            "Resource": [
+              "*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "iam:PassRole"
+            ],
+            "Resource": [
+              "*"
+            ],
+            "Condition": {
+              "StringEquals": {
+                "iam:PassedToService": [
+                  "cloudformation.amazonaws.com"
+                ]
+              }
+            }
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "kms:GenerateDataKey"
+            ],
+            "Resource": [
+              "arn:*:kms:*:*:key/*"
+            ],
+            "Condition": {
+              "StringLike": {
+                "kms:ViaService": [
+                  "s3.*.amazonaws.com"
+                ]
+              }
+            }
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "s3:CreateBucket",
+              "s3:GetBucketPolicy",
+              "s3:GetBucketTagging",
+              "s3:ListBucket",
+              "s3:PutBucketAcl",
+              "s3:PutBucketObjectLockConfiguration",
+              "s3:PutBucketOwnershipControls",
+              "s3:PutBucketPolicy",
+              "s3:PutBucketPublicAccessBlock",
+              "s3:PutBucketTagging",
+              "s3:PutBucketVersioning",
+              "s3:PutEncryptionConfiguration"
+            ],
+            "Resource": [
+              "arn:*:s3:*:*:accesspoint/*",
+              "arn:*:s3:::*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "s3:PutObject",
+              "s3:PutObjectAcl",
+              "s3:PutObjectLegalHold",
+              "s3:PutObjectRetention",
+              "s3:PutObjectTagging"
+            ],
+            "Resource": [
+              "arn:*:s3:*:*:accesspoint/*/object/*",
+              "arn:*:s3:::*/*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "s3-object-lambda:PutObject"
+            ],
+            "Resource": [
+              "arn:*:s3:*:*:accesspoint/*/object/*",
+              "arn:*:s3:::*/*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "sts:GetCallerIdentity"
+            ],
+            "Resource": [
+              "*"
+            ]
+          }
+        ]
+      },
+      "PolicyType": "Identity"
+    }
+  ],
+  "Warnings": [
+    {
+      "WarningType": "WildcardResource",
+      "Location": {
+        "PolicyIndex": 0,
+        "StatementIndex": 1
+      },
+      "Message": "Statement could not be scoped to specific resources and uses Resource \"*\". Review whether broad resource access is intended."
+    },
+    {
+      "WarningType": "WildcardResource",
+      "Location": {
+        "PolicyIndex": 0,
+        "StatementIndex": 2
+      },
+      "Message": "Statement could not be scoped to specific resources and uses Resource \"*\". Review whether broad resource access is intended."
+    },
+    {
+      "WarningType": "WildcardResource",
+      "Location": {
+        "PolicyIndex": 0,
+        "StatementIndex": 7
+      },
+      "Message": "Statement could not be scoped to specific resources and uses Resource \"*\". Review whether broad resource access is intended."
+    }
+  ]
+}

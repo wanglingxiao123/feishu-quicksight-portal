@@ -11,7 +11,11 @@ export function makeTemplate(c){
  const secret=k=>`{{resolve:secretsmanager:${c.runtimeSecretArn}:SecretString:${k}}}`;
  const resources={
  StateTable:{Type:'AWS::DynamoDB::Table',DeletionPolicy:'Retain',UpdateReplacePolicy:'Retain',Properties:{BillingMode:'PAY_PER_REQUEST',AttributeDefinitions:[{AttributeName:'pk',AttributeType:'S'}],KeySchema:[{AttributeName:'pk',KeyType:'HASH'}],TimeToLiveSpecification:{AttributeName:'expiresAt',Enabled:true},SSESpecification:{SSEEnabled:true},PointInTimeRecoverySpecification:{PointInTimeRecoveryEnabled:true}}},
- PortalApi:{Type:'AWS::Serverless::HttpApi',Properties:{StageName:'$default',DefaultRouteSettings:{ThrottlingBurstLimit:10,ThrottlingRateLimit:5}}},
+ PortalApi:{Type:'AWS::ApiGatewayV2::Api',Properties:{Name:sub('${AWS::StackName}-api'),ProtocolType:'HTTP'}},
+ PortalStage:{Type:'AWS::ApiGatewayV2::Stage',Properties:{ApiId:ref('PortalApi'),StageName:'$default',AutoDeploy:true,DefaultRouteSettings:{ThrottlingBurstLimit:10,ThrottlingRateLimit:5}}},
+ PortalIntegration:{Type:'AWS::ApiGatewayV2::Integration',Properties:{ApiId:ref('PortalApi'),IntegrationType:'AWS_PROXY',IntegrationUri:attr('PortalFunction','Arn'),PayloadFormatVersion:'2.0',TimeoutInMillis:30000}},
+ PortalRoute:{Type:'AWS::ApiGatewayV2::Route',Properties:{ApiId:ref('PortalApi'),RouteKey:'$default',Target:sub('integrations/${PortalIntegration}')}},
+ PortalInvokePermission:{Type:'AWS::Lambda::Permission',Properties:{FunctionName:ref('PortalFunction'),Action:'lambda:InvokeFunction',Principal:'apigateway.amazonaws.com',SourceAccount:ref('AWS::AccountId'),SourceArn:sub('arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${PortalApi}/*')}} ,
  PortalLogs:{Type:'AWS::Logs::LogGroup',DeletionPolicy:'Retain',UpdateReplacePolicy:'Retain',Properties:{LogGroupName:sub('/aws/lambda/${AWS::StackName}-app'),RetentionInDays:14}},
  PortalRole:{Type:'AWS::IAM::Role',Properties:{AssumeRolePolicyDocument:{Version:'2012-10-17',Statement:[{Effect:'Allow',Principal:{Service:'lambda.amazonaws.com'},Action:'sts:AssumeRole'}]},Policies:[{PolicyName:'PortalRuntime',PolicyDocument:{Version:'2012-10-17',Statement:[
  {Effect:'Allow',Action:actions.filter(a=>['dynamodb:GetItem','dynamodb:PutItem','dynamodb:DeleteItem'].includes(a)),Resource:attr('StateTable','Arn')},
@@ -22,7 +26,7 @@ export function makeTemplate(c){
  STATE_TABLE:ref('StateTable'),PUBLIC_ORIGIN:origin,FEISHU_APP_ID:c.feishuAppId,FEISHU_ACCESS_MODE:c.feishuAccessMode || 'tester',
  FEISHU_APP_SECRET:secret('FEISHU_APP_SECRET'),SESSION_SECRET:secret('SESSION_SECRET'),ENROLLMENT_TOKEN:secret('ENROLLMENT_TOKEN'),
  REPORT_OIDC_CLIENT_ID:c.oidc.clientId,REPORT_AUTH_READY:String(c.oidc.ready),
- }},Events:{Root:{Type:'HttpApi',Properties:{ApiId:ref('PortalApi'),Path:'/',Method:'ANY'}},Proxy:{Type:'HttpApi',Properties:{ApiId:ref('PortalApi'),Path:'/{proxy+}',Method:'ANY'}}}}},
+ }}}},
  };
  const contexts={StateTable:['Persist sessions and the per-user identities across code releases',['Retain on stack removal; do not reuse for another customer']],PortalApi:['HTTPS entry and stable callback origin',['Do not log auth query strings or embed URLs']],PortalLogs:['Runtime diagnostics without credentials',['Retain logs for 14 days']],PortalRole:['Scope generated SDK baseline to this table and configured namespace and explicit QuickSight exceptions',['No anonymous or subscription operations; embed only on application origin']],PortalFunction:['Serve frontend, Feishu gate and OIDC dashboard APIs',['Same-account commercial AWS deployment only; credentials via dynamic references']]};
  for(const [id,[why,must]]of Object.entries(contexts))resources[id].Metadata={'com.aws.cloudformation.Context':{why,must}};
