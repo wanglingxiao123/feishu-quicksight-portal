@@ -14,29 +14,29 @@
 
 AWS 资源和 Secrets Manager 会产生费用。本项目不替你购买 QuickSight 容量套餐。部署身份需要相应 CloudFormation、制品桶、IAM、Lambda、API Gateway、DynamoDB、CloudWatch Logs 权限，以及解析指定 Secrets Manager secret 的权限；客户应按自身权限流程授权。应用的运行角色由模板单独创建，不继承部署身份权限。
 
-部署权限及可复制的 JSON 见 [README：部署前，由管理员配置 AWS 权限](../README.md#部署前由管理员配置-aws-权限)。该策略授予部署身份，运行角色由模板单独创建；准备密钥、Cognito 客户端和 QuickSight 用户由对应管理员完成。
+部署权限及可复制的 JSON 见 [部署权限说明](IAM-SETUP.md)。该策略授予部署身份，运行角色由模板单独创建；准备密钥、Cognito 客户端和 QuickSight 用户由对应管理员完成。
 
 ## 先完成本机 AWS 登录
 
-按 [README：本机准备与 AWS 登录](../README.md#本机准备与-aws-登录首次部署按这里操作) 安装并检查工具，选择企业 SSO 或控制台身份登录路线，创建或复用 profile，运行身份查询，核对账户、角色及区域。本指南后续统一用 `portal-deploy`；复用公司已有 profile 时，将此名称替换为你验证通过的 profile。浏览器已登录 AWS 控制台不能代替这一步。
+按 [本机准备与 AWS 登录](AWS-LOGIN.md) 安装并检查工具，选择企业 SSO 或控制台身份登录路线，创建或复用 profile，运行身份查询，核对账户、角色及区域。本指南后续统一用 `portal-deploy`；复用公司已有 profile 时，将此名称替换为你验证通过的 profile。浏览器已登录 AWS 控制台不能代替这一步。
 
-查看 profile：在电脑终端执行 `aws configure list-profiles`，输出的每一行就是一个已有的登录配置名称。没有输出时，先按 README 第 2 节配置登录；有多个名称时，按第 3 节核对各自的账户和角色，不能仅凭名称选择。后续命令使用验证通过的名称。
+查看 profile：在电脑终端执行 `aws configure list-profiles`，输出的每一行就是一个已有的登录配置名称。没有输出时，先按本机登录指南第 2 节配置登录；有多个名称时，按本机登录指南第 3 节核对各自的账户和角色，不能仅凭名称选择。后续命令使用验证通过的名称。
 
-完成标志：README 中的身份查询成功，且管理员已为同一部署身份准备部署权限。普通员工无需执行部署或本机 AWS 登录。
+完成标志：本机登录指南中的身份查询成功，且管理员已为同一部署身份准备部署权限。普通员工无需执行部署或本机 AWS 登录。
 
-## 步骤 1：创建空的飞书企业自建应用
+## 步骤 1｜创建空飞书应用，部署报表中心
+
+### 1.1 创建空飞书应用
 
 1. 打开飞书开放平台 `https://open.feishu.cn`，选择目标企业。
 2. 进入开发者后台 → 创建企业自建应用，填写名称（例如“报表中心”）、描述，并选择一个内置图标，然后点击“创建”。
 3. 在“凭证与基础信息”中取得 **App ID**；App Secret 只在受控本地文件中使用，不贴进聊天或文档。
-4. 添加网页应用能力。应用首页、登录回调待步骤 2 获得地址后再填写；此时显示“未完成必填项配置”是正常的，不保存空主页地址，也不创建发布版本。
+4. 添加网页应用能力。应用首页、登录回调待本步骤部署取得地址后再填写；此时显示“未完成必填项配置”是正常的，不保存空主页地址，也不创建发布版本。
 5. 记录发布审核人。后续先将可用范围限制在两名测试人员。
 
 **完成标志：**目标企业中已有一个自建应用，并取得其凭证。
 
-## 步骤 2：获取代码、准备秘密并首次部署
-
-### 2.1 下载代码
+### 1.2 下载代码
 
 ```bash
 git clone https://github.com/wanglingxiao123/feishu-quicksight-portal.git
@@ -49,7 +49,7 @@ npm run secrets:generate
 
 不要用未知第三方的 AWS 凭据。生成脚本只在本地创建权限为 0600 的 `runtime-secret.local.json`，不会把值打印出来，也不会覆盖已有文件。
 
-### 2.2 将秘密保存到 Secrets Manager
+### 1.3 将密钥保存到 Secrets Manager
 
 1. 在本地编辑 `runtime-secret.local.json`，把 `FEISHU_APP_SECRET` 的占位内容换成步骤 1 的真实值；保留生成的 `SESSION_SECRET` 和 `ENROLLMENT_TOKEN`。
 2. 先确认 QuickSight 所在区域，并将 `config.local.json` 的 `region` 填为该区域；AWS 控制台右上角也选择同一区域。例如 `us-east-1` 对应“美国（弗吉尼亚北部）”。其他环境应选择自己的实际区域，不照抄示例。
@@ -62,7 +62,7 @@ npm run secrets:generate
 
 Agent 不需要检索密钥值。CloudFormation 用动态引用将秘密注入 Lambda；不得把秘密值写进配置模板、GitHub、日志或部署参数。更新 secret 本身不会保证现有 Lambda 环境立即更新；轮换时需规划函数配置更新，并注意 SESSION_SECRET 变化会使旧会话失效。
 
-### 2.3 填写非秘密配置
+### 1.4 填写应用配置
 
 编辑 `config.local.json`：
 
@@ -71,16 +71,16 @@ Agent 不需要检索密钥值。CloudFormation 用动态引用将秘密注入 L
 | `stackName` | 自定义资源栈名，例如 `feishu-report-portal`；后续更新继续使用同名 |
 | `awsAccountId`、`region` | 部署目标 AWS 账户 ID 和区域；必须与 QuickSight 相同 |
 | `feishuAppId` | 步骤 1 的 App ID |
-| `runtimeSecretArn` | 步骤 2.2 创建的密钥 ARN |
+| `runtimeSecretArn` | 步骤 1.3 创建的密钥 ARN |
 | `accountLabel` | 员工在账户选择框中看到的名称，如“集团报表” |
 | `feishuAccessMode` | `tenant`：允许已登记企业的员工；`tester`：仅首次登记人员 |
 | `oidc.provider` | `cognito` 或 `keycloak` |
 | `oidc.issuer` | 身份系统的完整 issuer，不带末尾 `/` |
 | `oidc.userPoolId` | Cognito → 用户池 → 概述中的 ID；Keycloak 无需此项 |
 | `oidc.authorizationOrigin` | Cognito → 品牌 → 域中的 HTTPS 域名；不是 issuer；Keycloak 无需此项 |
-| `oidc.clientId` | **首次部署留空**，步骤 3 创建客户端后填写 |
+| `oidc.clientId` | **首次部署留空**，步骤 2 创建客户端后填写 |
 | `oidc.ready` | **首次部署为 false**，回调配置好后再改为 true |
-| `autoBinding` | 一次性配置自动关联规则：启用、QuickSight namespace、允许的企业邮箱域，详见步骤 3.3 |
+| `autoBinding` | 一次性配置自动关联规则：启用、QuickSight namespace、允许的企业邮箱域，详见步骤 3.1 |
 | `identityMappings` | 可选的人工例外配置，正常自动关联时保持空列表 |
 
 Cognito issuer 格式：`https://cognito-idp.REGION.amazonaws.com/USER_POOL_ID`。
@@ -88,7 +88,7 @@ Keycloak issuer 格式：`https://sso.example.com/realms/REALM`。
 
 示例值不能部署，脚本会拒绝。首次部署允许登录客户端暂未就绪，从而先取得真实回调地址；应用不会因此绕过报表登录。
 
-### 2.4 打包、检查并部署
+### 1.5 打包、检查并部署
 
 先完成上方“本机 AWS 登录”。以下命令使用同一 profile `portal-deploy`；若用了其他名字，统一替换。请在有 `package.json`、`config.local.json` 的工程目录执行；不要在任意目录运行。
 
@@ -105,20 +105,20 @@ npm run outputs -- --profile portal-deploy
 
 **完成标志：**CloudFormation 栈创建成功；打开 `ApplicationUrl/healthz` 返回正常状态，首页可打开，但报表登录尚未启用。
 
-## 步骤 3：配置登录系统和每人的报表身份
+## 步骤 2｜配置登录系统
 
-### 3.1 Cognito 示例
+### 2.1 Cognito 示例
 
 1. AWS 控制台 → Cognito → 正确区域 → 目标用户池。
 2. 品牌 → 域：确认已有可用的 Cognito 登录域名。本示例支持该服务的 hosted domain；不使用自定义域名。
 3. 应用程序 → 应用程序客户端 → 创建专用客户端，选择不生成 client secret 的 public client。
 4. 启用授权码流程，允许 `openid`、`profile`、`email`；应用使用 PKCE S256。
-5. 登录成功的允许回调 URL：填写步骤 2 输出的 **ReportCallback**。
+5. 登录成功的允许回调 URL：填写步骤 1 输出的 **ReportCallback**。
 6. 保存 Client ID，填入 `config.local.json` 的 `oidc.clientId`。
 
 现有用户池可能需要管理员配置登录页面、允许的身份源和测试用户状态。不要覆盖其他应用已有的回调地址。默认自动关联使用登录系统返回的已验证邮箱匹配 QuickSight 用户；只有显式人工例外／历史配置才按 `cognito:username` 选择预设关联，不按飞书姓名猜测。
 
-### 3.2 已有 Keycloak 时
+### 2.2 已有 Keycloak 时
 
 1. 登录管理后台，进入业务 Realm，不要直接使用 `master`。
 2. Clients → 创建专用 OpenID Connect 客户端；启用 Standard flow，关闭 Client authentication，PKCE 使用 S256。
@@ -129,7 +129,9 @@ npm run outputs -- --profile portal-deploy
 
 Quick Desktop 示例中的 `http://localhost:18080` 是桌面客户端回调，**不能填到本应用**。Keycloak identity broker 从飞书返回的回调也不是本应用的 ReportCallback。
 
-### 3.3 配置一次自动关联规则
+## 步骤 3｜配置报表权限，启用登录
+
+### 3.1 配置自动关联规则
 
 默认配置：
 
@@ -179,23 +181,28 @@ npm run deploy -- --profile portal-deploy
 
 回调预检不会登录真实用户，不能代替最终验收。如果 IdP 的自定义页面不满足预检行为，先定位差异，不要直接关闭校验。
 
-### 3.4 QuickSight 嵌入域名
+### 3.2 QuickSight 嵌入域名
 
-QuickSight → 管理账户 → 管理域 / 嵌入域名，登记 **ApplicationUrl 的 HTTPS 来源**（不带回调路径）。代码同时在生成嵌入链接时传入该来源，IAM 条件也将其限制到此域名。不要开启“互联网任何人公开访问”。
+代码生成嵌入链接时已传入 **ApplicationUrl 的 HTTPS 来源**（不带回调路径），IAM 条件也限制到该来源。若企业另行维护 QuickSight 控制台域名白名单，在“管理账户 → 管理嵌入式控制面板的域”登记同一地址。域名配置不能代替仪表盘共享授权。
 
-## 步骤 4：填写飞书应用入口并发布测试版本
+## 步骤 4｜填写飞书应用入口
 
 1. 返回步骤 1 的飞书自建应用。
 2. 网页应用：桌面端和移动端首页都填写 **ApplicationUrl**。在打开方式配置中选择“在飞书内新标签页打开”，再保存；漏选打开方式会提示必填错误。
 3. 安全设置 / 重定向 URL：输入 **FeishuCallback** 后点击“添加”，确认地址出现在列表中；不能填写 Cognito 的 ReportCallback。
-4. 本轮基础登录授权页显示“获取用户身份标识”，无需开通额外通讯录权限即可取得入口所需身份。目标企业如另有审批要求，按实际授权页处理。
-5. 版本管理与发布 → 创建版本 → 可用范围先保留本人完成首轮测试，之后添加第二名测试人员。保存版本、复核范围，再确认发布；显示免审时可直接发布，需要审核时等待通过。不要选全员。
+4. 基础登录授权页显示“获取用户身份标识”，无需开通额外通讯录权限即可取得入口所需身份。目标企业如另有审批要求，按实际授权页处理。
 
-**完成标志：**页面显示“已发布”，可用范围仍为选定成员。随后完成首次登记和实际登录测试；发布成功不代表报表验收完成。
+**完成标志：**桌面端和移动端主页已保存，FeishuCallback 已出现在重定向 URL 列表中。
 
-## 步骤 5：登记企业并完成验收
+## 步骤 5｜发布给测试人员并验收
 
-### 5.1 管理员首次登记
+### 5.1 发布测试版本
+
+版本管理与发布 → 创建版本 → 可用范围先保留本人完成首轮测试，之后添加第二名测试人员。保存版本、复核范围，再确认发布；显示免审时可直接发布，需要审核时等待通过。不要选全员。
+
+**完成标志：**页面显示“已发布”，可用范围仍为选定成员。继续登记企业并测试实际登录。
+
+### 5.2 管理员首次登记
 
 由指定管理员在受控环境取得 `ENROLLMENT_TOKEN`，在自己的浏览器打开：
 
@@ -207,7 +214,7 @@ ApplicationUrl/auth/enroll/ENROLLMENT_TOKEN
 
 `tenant` 模式允许同一飞书企业的员工进入；`tester` 模式只允许登记者。无论哪种模式，报表访问都还必须通过 OIDC 核验与自动关联/既有关联检查。登记后后台不会自动改变飞书的应用可用范围。
 
-### 5.2 测试清单
+### 5.3 测试清单
 
 - 管理员打开首页，选择账户并登录，连续打开两张已授权仪表盘。
 - 第二名测试人员通过自己的飞书和 OIDC 身份登录，个人中心显示自己的 QuickSight 用户。
