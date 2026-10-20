@@ -80,17 +80,41 @@ aws --version
 
 **完成标志：**四条命令均显示版本。`node` 至少为 `v22.12.0`，AWS CLI 显示 `aws-cli/2.…` 且不低于 2.32.0。出现 `command not found` 时先按对应安装页面处理 PATH，不继续部署。部署通过项目自带的 AWS SDK 脚本完成，不需要安装 SAM CLI、Python 或 Docker。
 
-### 2｜选择符合企业环境的登录方式，只执行一条路线
+### 2｜查看本机 profile，再选择登录方式
 
-已有公司规定的凭据工具／profile 时，继续使用它，按公司的流程刷新凭据，然后直接做第 3 节验证；部署命令中的 `portal-deploy` 全部换成该 profile 名称。不知道公司采用哪一种时，将本节四项资料清单交给 AWS 管理员确认，不要把报表登录的 Cognito 账号填进 AWS CLI。
+#### 2.1｜profile 在哪里看？
 
-可先列出已有 profile 名称，不会输出密钥：
+**在电脑终端里查看，不是在 AWS 或 QuickSight 网页里查。**profile 是一组本机 AWS 登录配置的名称，不是一个需要上传的文件。
+
+打开刚才检查工具版本的同一个终端，在任意文件夹执行：
 
 ```bash
 aws configure list-profiles
 ```
 
-如果下文示例名已被其他项目使用，请换一个新的名字，并在后续命令中一致使用，不覆盖原配置。
+例如输出：
+
+```text
+default
+portal-deploy
+```
+
+每一行都是一个已有的 profile 名称，`default` 也是名称；你的输出可能不同。**列出名称不代表已经登录，也不能凭名称判断它属于哪个 AWS 账户。**
+
+| 看到什么 | 下一步 |
+|---|---|
+| 已有公司指定的 profile | 记下完整名称，按公司流程刷新登录，再按第 3 节验证账户、角色和区域 |
+| 有多个名称，不知道选哪个 | 按第 3 节的身份查询命令逐个核对；把命令中的 `portal-deploy` 换成待核对的名称，不默认选择第一行 |
+| 没有输出 | 当前终端未找到已配置的 profile；按下面的路线 A 或 B 创建，完成后重新执行查看命令 |
+| 提示 `aws: command not found` | 回到第 1 节安装 AWS CLI，并重新打开终端 |
+
+例如验证通过的名称为 `portal-deploy`，后续命令中的 `your-profile` 就替换为 `portal-deploy`；实际名称不同则使用实际名称。无需重命名已有 profile。
+
+#### 2.2｜需要新建或刷新登录时，选择一条路线
+
+已有公司规定的凭据工具／profile 时，继续使用它，按公司的流程刷新凭据，然后直接做第 3 节验证。不知道公司采用哪一种时，向 AWS 管理员确认本节开头的四项资料，不要把报表登录的 Cognito 账号填进 AWS CLI。
+
+下文用 `portal-deploy` 作为新 profile 的示例名称。如果已被其他项目使用，请换一个新名称，并在后续命令中一致使用，不覆盖原配置。
 
 <details open>
 <summary><strong>路线 A：公司已使用 IAM Identity Center（企业 AWS SSO）</strong></summary>
@@ -110,7 +134,7 @@ aws configure sso --profile portal-deploy
 | `SSO region` | 管理员提供的 Identity Center 所在区域 |
 | `SSO registration scopes` | 接受默认 `sso:account:access` |
 | 浏览器授权 | 用自己的企业身份登录，核对 AWS CLI 授权请求后确认 |
-| AWS account | 选择准备清单中的 12 位目标账户；只有一个选项时可能自动跳过 |
+| AWS account | 选择 AWS 管理员提供的 12 位目标账户；只有一个选项时可能自动跳过 |
 | IAM role／permission set | 选择管理员授权用于本应用部署的角色，不能选只读角色；单一选项也可能跳过 |
 | `Default client Region`／`CLI default client Region` | 应用部署区域，与后续 `config.local.json` 的 `region` 一致 |
 | `CLI default output format` | `json`；某些版本不询问此项 |
@@ -165,6 +189,8 @@ aws configure set output json --profile portal-deploy
 
 在之后执行部署命令的同一个终端中运行：
 
+下面以 `portal-deploy` 为例。已有 profile 时，将两条命令中的名称都替换为第 2.1 节查到的实际名称；不要原样执行一个本机不存在的名称。
+
 ```bash
 aws sts get-caller-identity --profile portal-deploy --query '{Account:Account,Arn:Arn}' --output json --no-cli-pager
 aws configure get region --profile portal-deploy
@@ -216,7 +242,6 @@ npm run outputs -- --profile portal-deploy
 | 身份查询成功，部署却 `AccessDenied` | 按错误中的 API 和资源 ARN 核对下一节部署 IAM 策略、权限边界／SCP；反复登录不会补齐部署权限 |
 | 浏览器选了正确账号，终端仍显示别的账号 | 检查指定的 profile 和企业凭据工具；重新走对应授权流程，再以身份查询结果为准 |
 | CLI 身份查询成功，但 Node.js 使用了另一身份 | 请管理员检查终端是否残留其他项目的 AWS 凭据环境变量、`AWS_CONFIG_FILE`／`AWS_SHARED_CREDENTIALS_FILE` 或自定义 endpoint；不要打印变量值或直接删除整个 `.aws` 目录 |
-| GitHub `Repository not found`／无权克隆 | 仓库是私有的，先接受访问邀请并完成 GitHub 身份验证；这不是 AWS IAM 错误 |
 
 以上登录方式依据 AWS 官方文档核对；本文未替你完成企业授权或在新的部署身份下执行部署。参考：[Identity Center SSO](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html)、[控制台身份本机登录与凭据兼容配置](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html)、[本机登录策略](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/SignInLocalDevelopmentAccess.html)。
 
