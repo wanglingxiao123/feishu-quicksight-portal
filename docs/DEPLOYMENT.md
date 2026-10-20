@@ -14,6 +14,8 @@
 
 AWS 资源和 Secrets Manager 会产生费用。本项目不替你购买 QuickSight 容量套餐。部署身份需要相应 CloudFormation、制品桶、IAM、Lambda、API Gateway、DynamoDB、CloudWatch Logs 权限，以及解析指定 Secrets Manager secret 的权限；客户应按自身权限流程授权。应用的运行角色由模板单独创建，不继承部署身份权限。
 
+部署权限及可复制的 JSON 见 [README：部署前，由管理员配置 AWS 权限](../README.md#部署前由管理员配置-aws-权限)。该策略授予部署身份，运行角色由模板单独创建；准备密钥、Cognito 客户端和 QuickSight 用户由对应管理员完成。
+
 ## 步骤 1：创建空的飞书企业自建应用
 
 1. 打开飞书开放平台 `https://open.feishu.cn`，选择目标企业。
