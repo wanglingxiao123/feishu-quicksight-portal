@@ -45,7 +45,7 @@ cp config/example.json config.local.json
 npm run secrets:generate
 ```
 
-私有仓库需要先获得仓库访问权限。不要用未知第三方的 AWS 凭据。生成脚本只在本地创建权限为 0600 的 `runtime-secret.local.json`，不会把值打印出来，也不会覆盖已有文件。
+不要用未知第三方的 AWS 凭据。生成脚本只在本地创建权限为 0600 的 `runtime-secret.local.json`，不会把值打印出来，也不会覆盖已有文件。
 
 ### 2.2 将秘密保存到 Secrets Manager
 
