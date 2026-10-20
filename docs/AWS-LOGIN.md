@@ -16,7 +16,7 @@
 | 被授权的部署角色／权限集 | 须具备[部署权限策略](IAM-SETUP.md)中的权限；只读角色不能创建应用 |
 | 本机登录方式 | IAM Identity Center 的 SSO；或允许 `aws login` 的控制台身份；或公司指定的本机凭据工具 |
 
-选择 Identity Center 路线时，还需要 **SSO Start URL 和 SSO Region**。可在企业 AWS 访问门户选择目标账户／权限集旁的 “Access keys／访问密钥” → “IAM Identity Center credentials” 查看，或向管理员索取。这一步只记录 Start URL 和 Region，不复制临时密钥。**SSO Region 是 Identity Center 所在区域，可能与应用部署区域不同；Cognito issuer 和 QuickSight 登录链接都不是 SSO Start URL。**
+选择 Identity Center 路线时，还需要 **SSO Start URL 和 SSO Region**。可在企业 AWS 访问门户选择目标账户／权限集旁的 “Access keys／访问密钥” → “IAM Identity Center credentials” 查看，或向管理员索取。这一步只记录 Start URL 和 Region，不复制临时密钥。 **SSO Region 是 Identity Center 所在区域，可能与应用部署区域不同；Cognito issuer 和 QuickSight 登录链接都不是 SSO Start URL。**
 
 ### 1｜安装工具并确认终端能找到它们
 
@@ -37,13 +37,13 @@ git --version
 aws --version
 ```
 
-**完成标志：**四条命令均显示版本。`node` 至少为 `v22.12.0`，AWS CLI 显示 `aws-cli/2.…` 且不低于 2.32.0。出现 `command not found` 时先按对应安装页面处理 PATH，不继续部署。部署通过项目自带的 AWS SDK 脚本完成，不需要安装 SAM CLI、Python 或 Docker。
+**完成标志：** 四条命令均显示版本。`node` 至少为 `v22.12.0`，AWS CLI 显示 `aws-cli/2.…` 且不低于 2.32.0。出现 `command not found` 时先按对应安装页面处理 PATH，不继续部署。部署通过项目自带的 AWS SDK 脚本完成，不需要安装 SAM CLI、Python 或 Docker。
 
 ### 2｜查看本机 profile，再选择登录方式
 
 #### 2.1｜profile 在哪里看？
 
-**在电脑终端里查看，不是在 AWS 或 QuickSight 网页里查。**profile 是一组本机 AWS 登录配置的名称，不是一个需要上传的文件。
+**在电脑终端里查看，不是在 AWS 或 QuickSight 网页里查。** profile 是一组本机 AWS 登录配置的名称，不是一个需要上传的文件。
 
 打开刚才检查工具版本的同一个终端，在任意文件夹执行：
 
@@ -170,9 +170,9 @@ aws configure get region --profile portal-deploy
 - `Arn` 对应被授权的部署角色／用户。即使账户相同，使用了只读角色也不能部署；IAM 用户登录时 ARN 格式与上面的角色示例不同。
 - 第二条显示的区域，与目标 QuickSight 区域及后续配置的 `region` 一致。SSO 的 `sso_region` 可以不同。
 
-账户或角色错误时回到所选登录路线重新选择；**不要为了通过检查，把项目配置改成错误账户。**区域错误时用 `aws configure set region 你的实际区域 --profile portal-deploy` 修正，再检查一次。
+账户或角色错误时回到所选登录路线重新选择；**不要为了通过检查，把项目配置改成错误账户。** 区域错误时用 `aws configure set region 你的实际区域 --profile portal-deploy` 修正，再检查一次。
 
-**完成标志：**身份查询成功，账户、角色、区域均正确。此查询只证明凭据有效，不能证明所有创建权限都已具备；管理员还需完成[部署权限说明](IAM-SETUP.md)中的授权。登录与 IAM 授权两项都完成后，才执行部署。
+**完成标志：** 身份查询成功，账户、角色、区域均正确。此查询只证明凭据有效，不能证明所有创建权限都已具备；管理员还需完成[部署权限说明](IAM-SETUP.md)中的授权。登录与 IAM 授权两项都完成后，才执行部署。
 
 ### 4｜让后续部署使用同一个 profile
 
