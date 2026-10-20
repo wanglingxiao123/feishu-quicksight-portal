@@ -23,7 +23,7 @@ export function mountReportRoutes(app, {
   };
   const resolveSession = async session => {
     const base = byId.get(session?.tenantId);
-    if (!base) return {};
+    if (!base || !ready(base)) return {};
     if (/^auto-[a-f0-9]{64}$/.test(session.mappingId || '')) {
       const binding = await readBinding(`${base.id}#${session.mappingId}`);
       if (reservedArns().includes(binding?.quickSightUserArn)) return {};
@@ -32,7 +32,12 @@ export function mountReportRoutes(app, {
       return {tenant,binding};
     }
     const tenant = resolvedTenant(base, session.mappingId);
-    return {tenant,binding:tenant ? await readBinding(identityStorageKey(tenant)) : undefined};
+    const binding = tenant ? await readBinding(identityStorageKey(tenant)) : undefined;
+    if (!validReportSession(tenant, binding, session)) return {};
+    const user = await describeUser(tenant);
+    if (user?.Arn !== tenant.pilotUserArn || user.Active !== true
+      || (binding.quickSightPrincipalId && user.PrincipalId !== binding.quickSightPrincipalId)) return {};
+    return {tenant,binding};
   };
   const identity = async (req, res, next) => {
     const {tenant,binding} = await resolveSession(req.session.report);
@@ -109,13 +114,18 @@ export function mountReportRoutes(app, {
     }
     if (!tenant) return failure(req, res, 'identity_not_mapped');
     binding ||= await readBinding(identityStorageKey(tenant));
+    // Recheck existing explicit identities as well as first-time bindings.
+    const user = await describeUser(tenant);
+    if (user?.Arn !== tenant.pilotUserArn || user.Active !== true
+      || (binding?.quickSightPrincipalId && user.PrincipalId !== binding.quickSightPrincipalId)) {
+      return failure(req, res, 'not_allowed');
+    }
     if (!binding) {
       // Confirm that the explicitly approved enterprise principal is an active QuickSight user.
-      const user = await describeUser(tenant);
-      if (user?.Arn !== tenant.pilotUserArn || user.Active !== true) return failure(req, res, 'not_allowed');
       const candidate = {
         enabled: true, tenantId: tenant.id, issuer: tenant.issuer, subject: claims.sub,
         quickSightUserArn: user.Arn, name: claims.name || claims.preferred_username || tenant.pilotLogin,
+        ...(user.PrincipalId ? {quickSightPrincipalId: user.PrincipalId} : {}),
       };
       await createBinding(identityStorageKey(tenant), candidate);
       binding = await readBinding(identityStorageKey(tenant));

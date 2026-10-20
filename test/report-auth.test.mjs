@@ -192,6 +192,29 @@ test('unconfigured SSO fails closed, without falling back to a static catalog', 
   assert.equal((await h.request('/api/dashboards')).status, 401);
   assert.equal(h.calls.begin.length, 0);
 });
+test('an existing explicit session and repeat login reject a deactivated QuickSight user', async t => {
+  const h = await harness(t); await h.login(); await h.request('/api/me');
+  h.inactive();
+  for (const [path, method] of [['/api/me','GET'], ['/api/dashboards','GET'],
+    ['/api/dashboards/company-a-dashboard/embed','POST']]) {
+    assert.equal((await h.request(path,method)).status,401);
+  }
+  assert.equal(h.calls.search.length,0);
+  assert.equal(h.calls.embed.length,0);
+  assert.equal((await h.login()).callback.location,'/?login_error=not_allowed');
+});
+test('new explicit bindings pin the QuickSight principal, and disabled providers reject existing sessions', async t => {
+  const h = await harness(t);
+  h.liveUser({Arn:tenant.pilotUserArn,Active:true,PrincipalId:'original-principal'});
+  await h.login();
+  assert.equal((await h.request('/api/me')).status,200);
+  h.liveUser({Arn:tenant.pilotUserArn,Active:true,PrincipalId:'replacement-principal'});
+  assert.equal((await h.request('/api/me')).status,401);
+  assert.equal((await h.login()).callback.location,'/?login_error=not_allowed');
+  const j = await harness(t); await j.login(); j.disable();
+  assert.equal((await j.request('/api/me')).status,401);
+  assert.equal((await j.request('/api/dashboards')).status,401);
+});
 test('expired report identity can restart login instead of redirecting in a loop', async t => {
   const h = await harness(t); await h.login(); await h.expire();
   assert.equal((await h.request('/api/me')).status, 401);

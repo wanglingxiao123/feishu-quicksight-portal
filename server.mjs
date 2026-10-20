@@ -104,7 +104,7 @@ const feishu = async (path, options = {}) => {
   }
   return body;
 };
-app.get('/healthz', (_req, res) => res.json({ ok: true, version: '0.2.0', mode: 'verified-report-identity' }));
+app.get('/healthz', (_req, res) => res.json({ ok: true, version: '0.2.1', mode: 'verified-report-identity' }));
 app.get('/auth/enroll/:token', async (req, res) => {
   if (db) owner = await readOwner();
   if (owner || !safeEqual(req.params.token, env.ENROLLMENT_TOKEN)) return res.sendStatus(404);

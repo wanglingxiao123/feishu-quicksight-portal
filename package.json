@@ -1,6 +1,6 @@
 {
   "name": "feishu-quicksight-portal",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Feishu dashboard portal with verified per-user OIDC identity and scoped QuickSight embedding",
   "main": "index.js",
   "scripts": {
