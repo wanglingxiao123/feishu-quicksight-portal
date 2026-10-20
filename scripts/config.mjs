@@ -7,8 +7,8 @@ export function validateConfig(c){
  if(!/^\d{12}$/.test(c.awsAccountId)||!/^([a-z]{2})-[a-z]+-\d$/.test(c.region))throw Error('Invalid AWS account or region (commercial AWS only)');
  if(!/^cli_[A-Za-z0-9]+$/.test(c.feishuAppId))throw Error('Invalid Feishu app ID');
  if(!c.runtimeSecretArn?.startsWith(`arn:aws:secretsmanager:${c.region}:${c.awsAccountId}:secret:`))throw Error('Runtime secret must be in the deployment account and region');
- if(!c.identityMappings?.length && !c.quickSightUserArn?.startsWith(`arn:aws:quicksight:${c.region}:${c.awsAccountId}:user/`))throw Error('This starter requires QuickSight in the deployment account and region');
- if(!['cognito','keycloak'].includes(c.oidc?.provider)||(!c.identityMappings?.length&&!c.oidc.pilotLogin)||!c.accountLabel)throw Error('Missing identity configuration');
+ if(!c.autoBinding?.enabled && !c.identityMappings?.length && !c.quickSightUserArn?.startsWith(`arn:aws:quicksight:${c.region}:${c.awsAccountId}:user/`))throw Error('This starter requires QuickSight in the deployment account and region');
+ if(!['cognito','keycloak'].includes(c.oidc?.provider)||(!c.autoBinding?.enabled&&!c.identityMappings?.length&&!c.oidc.pilotLogin)||!c.accountLabel)throw Error('Missing identity configuration');
  const issuer=new URL(c.oidc.issuer);if(issuer.protocol!=='https:'||issuer.search||issuer.hash||c.oidc.issuer.endsWith('/'))throw Error('Use exact HTTPS issuer without trailing slash');
  if(typeof c.oidc.ready!=='boolean'||(c.oidc.ready&&!c.oidc.clientId))throw Error('Ready login requires clientId');
  if(c.oidc.provider==='cognito'){
@@ -21,6 +21,6 @@ export function validateConfig(c){
 }
 export async function readConfig(){return validateConfig(JSON.parse(await readFile('config.local.json','utf8')));}
 export function tenantFromConfig(c){return {id:'company',label:c.accountLabel,accountId:c.awsAccountId,region:c.region,
- identityMappings:c.identityMappings,issuer:c.oidc.issuer,provider:c.oidc.provider,pilotLogin:c.oidc.pilotLogin,pilotUserArn:c.quickSightUserArn,
+ autoBinding:c.autoBinding,identityMappings:c.identityMappings,issuer:c.oidc.issuer,provider:c.oidc.provider,pilotLogin:c.oidc.pilotLogin,pilotUserArn:c.quickSightUserArn,
  userPoolId:c.oidc.userPoolId,authorizationOrigin:c.oidc.authorizationOrigin,useExecutionRole:true,
  clientIdEnv:'REPORT_OIDC_CLIENT_ID',readyEnv:'REPORT_AUTH_READY'};}

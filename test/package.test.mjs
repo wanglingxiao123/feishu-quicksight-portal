@@ -26,3 +26,12 @@ test('shipped example cannot be deployed unchanged',async()=>{
  const example=JSON.parse(await readFile('config/example.json','utf8'));
  assert.throws(()=>validateConfig(example),/Replace example/);
 });
+
+
+test('automatic mode deploys without per-user mappings and scopes ListUsers to one namespace',()=>{
+ const auto={...c,quickSightUserArn:undefined,oidc:{...c.oidc,pilotLogin:undefined},autoBinding:{enabled:true,namespace:'default',allowedEmailDomains:['example.com']},identityMappings:[]};
+ validateConfig(auto);
+ const t=makeTemplate(auto),s=t.Resources.PortalRole.Properties.Policies[0].PolicyDocument.Statement;
+ assert.equal(s.find(x=>x.Action==='quicksight:ListUsers').Resource,'arn:aws:quicksight:us-east-1:111111111111:user/default/*');
+ assert.deepEqual(s.find(x=>x.Action==='quicksight:GenerateEmbedUrlForRegisteredUser').Resource,['arn:aws:quicksight:us-east-1:111111111111:user/default/*']);
+});

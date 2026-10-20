@@ -65,7 +65,8 @@ Agent 不需要检索密钥值。CloudFormation 用动态引用将秘密注入 L
 | `oidc.authorizationOrigin` | Cognito → 品牌 → 域中的 HTTPS 域名；不是 issuer；Keycloak 无需此项 |
 | `oidc.clientId` | **首次部署留空**，步骤 3 创建客户端后填写 |
 | `oidc.ready` | **首次部署为 false**，回调配置好后再改为 true |
-| `identityMappings` | 每人的登录名及其 QuickSight UserArn，详见步骤 3.3 |
+| `autoBinding` | 一次性配置自动关联规则：启用、QuickSight namespace、允许的企业邮箱域，详见步骤 3.3 |
+| `identityMappings` | 可选的人工例外配置，正常自动关联时保持空列表 |
 
 Cognito issuer 格式：`https://cognito-idp.REGION.amazonaws.com/USER_POOL_ID`。
 Keycloak issuer 格式：`https://sso.example.com/realms/REALM`。
@@ -113,37 +114,52 @@ npm run outputs -- --profile your-profile
 
 Quick Desktop 示例中的 `http://localhost:18080` 是桌面客户端回调，**不能填到本应用**。Keycloak identity broker 从飞书返回的回调也不是本应用的 ReportCallback。
 
-### 3.3 配置每个用户的映射
+### 3.3 配置一次自动关联规则
 
-由 QuickSight 管理员提供每位用户的 **UserArn**，确认该用户 Active 且已被分享对应仪表盘。ARN 包含 namespace 和用户名，不能用账户名称替代；可通过已授权的 `DescribeUser` / `ListUsers` API 查询。Agent 只读取身份标识，不需要用户密码。
+默认配置：
 
 ```json
-"identityMappings": [
-  {
-    "id": "employee-001",
-    "login": "alice",
-    "quickSightUserArn": "arn:aws:quicksight:us-east-1:123456789012:user/default/alice",
-    "enabled": true
-  },
-  {
-    "id": "employee-002",
-    "login": "bob",
-    "quickSightUserArn": "arn:aws:quicksight:us-east-1:123456789012:user/default/bob",
-    "enabled": true
-  }
-]
+"autoBinding": {
+  "enabled": true,
+  "namespace": "default",
+  "allowedEmailDomains": ["your-company.com"]
+},
+"identityMappings": []
 ```
 
-以上标识全部是示例。`id` 是稳定唯一的配置键；`login` 为 Cognito 用户名，或 Keycloak 返回的用户名/已验证邮箱。需要更严格预绑定时，加入 `subject`，填写可信身份系统实际的用户 `sub`。
+把 `your-company.com` 换成企业实际邮箱域（只写域名，不带 `@`）。多个域可列在数组中；只匹配精确域，不自动包含子域。空数组代表不额外限制邮箱域，但仍限定为当前可信 IdP、已验证邮箱、已登记飞书企业和指定 QuickSight namespace；仅在身份管理员确认符合企业策略时使用。
 
-首次成功登录会把已经验证的 `issuer + sub` 与这条映射固定存入 DynamoDB；同名但不同 `sub` 的身份不能覆盖绑定。不要把多个员工映射到管理员 UserArn。删除/禁用映射会阻止下一次应用 API 授权，已兑换的 QuickSight iframe 会话可能持续到自身到期。
+管理员准备一次：
+1. 确认 Cognito / Keycloak 是可信的企业身份来源，用户不能伪造已验证邮箱。建议关闭无约束自助注册；由企业目录或管理员管理成员。
+2. 确认登录 token 可读 `email`，并且 `email_verified` 是布尔值 `true`。Cognito 用户状态 CONFIRMED 本身不等于邮箱已验证；不要为了通过测试批量伪造验证状态。
+3. QuickSight 管理员确认已有用户的邮箱准确、唯一、用户有效，且被授权查看相应报表。
+4. 设置 namespace 和企业邮箱域，保留 `identityMappings: []`。
 
-将 `oidc.ready` 改为 `true`，重新打包并部署：
+员工第一次登录时：应用核验 OIDC token → 读取验证邮箱 → 分页查询目标 namespace 的 QuickSight 用户 → 精确匹配唯一邮箱 → 以 DynamoDB 事务保存 `issuer + sub` 与 QuickSight `Arn + PrincipalId` 的关联，并锁定该 QuickSight 用户的关联归属。
+
+以后登录复用关联，不重新遍历整个用户目录；每次受保护的报表请求检查 QuickSight 用户是否有效、邮箱与 PrincipalId 是否仍一致。邮箱变化、同邮箱多个 QuickSight 用户、用户删除重建、另一 sub 尝试占用已有用户时不会静默改绑。
+
+**日常增加员工：在企业身份系统和 QuickSight 中正常开通账号，确保验证邮箱一致，并分享相应报表。员工首次登录即自动接入，不需要修改本项目配置或重新部署。**这不是自动创建 QuickSight 用户；没有 QuickSight 用户仍需要管理员开通。
+
+设置 `oidc.clientId`、将 `oidc.ready` 改为 `true`，首次启用规则时重新打包部署：
 
 ```bash
 npm run package
 npm run verify:identity -- --profile your-profile
 npm run deploy -- --profile your-profile
+```
+
+自动模式的运行权限限定在指定账户、区域和 namespace 的用户资源，并允许读取用户目录。嵌入链接仍限定应用域名；个人可见报表仍由自己的 QuickSight 用户权限决定。
+
+**人工例外与旧配置兼容：**确需不同邮箱或历史测试身份时，可以保留显式 `identityMappings`（旧版 pilot 配置也兼容）。人工配置优先，已占用的用户不会被自动关联接管；已禁用的显式映射不会自动回退到邮箱匹配。普通员工不需要这些例外。
+
+```json
+"identityMappings": [{
+  "id": "legacy-exception",
+  "login": "legacy-login-name",
+  "quickSightUserArn": "arn:aws:quicksight:us-east-1:123456789012:user/default/legacy-user",
+  "enabled": true
+}]
 ```
 
 回调预检不会登录真实用户，不能代替最终验收。如果 IdP 的自定义页面不满足预检行为，先定位差异，不要直接关闭校验。
@@ -174,19 +190,20 @@ ApplicationUrl/auth/enroll/ENROLLMENT_TOKEN
 
 把两处占位符替换为实际值。不要把完整链接贴进公共文档、日志、截图或群聊。此链接只用于首次登记：首次完成飞书授权后，DynamoDB 固定允许的飞书 tenantKey；以后该链接不再可用，普通员工直接打开首页。
 
-`tenant` 模式允许同一飞书企业的员工进入；`tester` 模式只允许登记者。无论哪种模式，报表访问都还必须通过 OIDC 身份及映射检查。登记后后台不会自动改变飞书的应用可用范围。
+`tenant` 模式允许同一飞书企业的员工进入；`tester` 模式只允许登记者。无论哪种模式，报表访问都还必须通过 OIDC 核验与自动关联/既有关联检查。登记后后台不会自动改变飞书的应用可用范围。
 
 ### 5.2 测试清单
 
 - 管理员打开首页，选择账户并登录，连续打开两张已授权仪表盘。
 - 第二名测试人员通过自己的飞书和 OIDC 身份登录，个人中心显示自己的 QuickSight 用户。
 - 两人的私有报表目录正确；尝试直接访问对方的仪表盘 ID，后端拒绝。
-- 未配置映射的用户显示“联系管理员”，不能看到别人的目录。
+- 新增一个符合规则的员工：不改项目配置即可首次登录、自动保存关联；重复登录仍是同一用户。
+- 未验证邮箱、QuickSight 用户不存在、重复邮箱、其他 sub 争用已关联用户时被拒绝，不能看到他人的目录。
 - 切换账号后旧 iframe 被清除，不把外部 Chrome 的 QuickSight 登录状态当作本应用身份。
 - 分别在飞书网页、桌面端、手机端测试。桌面 Chrome 成功不等于手机 WebView 已通过。
 - 应用会话默认 8 小时、报表身份 1 小时、嵌入会话 60 分钟；当前没有自动刷新 OIDC 登录的功能。
 
-通过后，再按组织流程扩大飞书可用范围。**已配置身份映射的员工无需改代码；新增映射需更新配置、打包部署。**如需自动同步企业目录或管理界面，应另行开发。
+通过后，再按组织流程扩大飞书可用范围。**符合自动关联规则的新增员工无需改代码、配置或重新部署。**修改全局规则/人工例外需部署；自动创建 QuickSight 用户、企业目录同步或授权管理界面仍不包含。
 
 ## 更新、回滚与卸载
 
@@ -194,7 +211,7 @@ ApplicationUrl/auth/enroll/ENROLLMENT_TOKEN
 - 更新前保留当前 Git tag 和安全保存的 `config.local.json`。回滚时检出对应版本，使用匹配配置重新打包、审核 change set 后更新。
 - 不要为了修回调删除整个 stack。删除重建可能更换应用地址，使回调失效。
 - DynamoDB 和日志默认 Retain；删除 stack 不会自动删除它们，避免丢失授权绑定，但保留资源仍可能计费。SAM 制品桶和 Secrets Manager secret 也需单独按组织流程清理。
-- 改变映射 id、issuer 或用户 sub 前，先规划身份重新绑定。不要直接把已有用户绑定改成另一个人。
+- 改变邮箱、issuer、sub、namespace、允许邮箱域或 QuickSight 用户 PrincipalId 前，先规划身份重新绑定。自动关联和反向归属锁没有 TTL，不会随登录会话过期而消失；停用用户应由管理员将对应身份记录 `enabled` 设为 false，并在 QuickSight 侧执行相应停用。改绑必须核实两边真实身份，处理两条记录的一致性，不要仅删其中一条锁，也不要清空整张会话表。已兑换的嵌入会话仍可能持续到期。
 
 ## 常见问题
 
@@ -204,6 +221,6 @@ ApplicationUrl/auth/enroll/ENROLLMENT_TOKEN
 | 首次打包被拒绝 | 检查 REPLACE_ME、示例账户、跨账户 UserArn、缺少 Client ID 却设 ready=true |
 | Cognito 回调失败 | 核对 ReportCallback 完整地址、客户端、授权码流程和 scopes |
 | Keycloak client not found | 核对业务 Realm 和专用客户端 ID |
-| 能进飞书应用但无报表权限 | 核对 identityMappings、OIDC 用户声明、QuickSight UserArn 和报表分享；发布给全员不等于获得报表权限 |
+| 能进飞书应用但无报表权限 | 核对验证邮箱、namespace、唯一 QuickSight 用户、既有关联和报表分享；发布给全员不等于获得报表权限 |
 | 登录提示其他企业不可用 | 检查首次登记的企业是否正确；不要删除企业限制来绕过问题 |
 | 更新后地址变化 | 是否误用了新 stackName 或重建 API；按新输出同步两个回调 |

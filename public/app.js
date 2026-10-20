@@ -157,7 +157,18 @@ async function boot() {
   if (res.status === 401) {
     await loginScreen();
     const error = new URLSearchParams(location.search).get('login_error');
-    status(error === 'identity_not_mapped' ? '此登录账号尚未配置报表访问权限，请联系应用管理员。' : error ? '报表账号登录未完成，请重新选择账号登录。' : '');
+    const messages = {
+      identity_not_mapped:'此登录账号尚未配置报表访问权限，请联系应用管理员。',
+      email_not_verified:'登录邮箱尚未验证，请先完成企业账号的邮箱验证。',
+      email_domain_not_allowed:'此邮箱不在应用允许的企业邮箱范围内，请联系管理员。',
+      quicksight_user_missing:'尚未找到对应的 QuickSight 用户，请联系管理员开通账号并核对邮箱。',
+      quicksight_user_ambiguous:'存在多个相同邮箱的 QuickSight 用户，请联系管理员核对后重试。',
+      quicksight_user_inactive:'对应的 QuickSight 用户尚未启用，请联系管理员。',
+      identity_binding_conflict:'此报表用户已有关联身份，请联系管理员核对，应用不会覆盖原有关联。',
+      identity_binding_changed:'你的登录身份信息发生变化，请联系管理员核对原有关联。',
+      quicksight_identity_changed:'QuickSight 用户状态或身份发生变化，请联系管理员核对。',
+    };
+    status(error ? messages[error] || '报表账号登录未完成，请重新选择账号登录。' : '');
     if (error) history.replaceState(null, '', '/');
     return;
   }

@@ -1,3 +1,4 @@
+import { resolvedAutomaticTenant, resolveAutomaticLogin, automaticUserMatches, IdentityLinkError } from './automatic-identity.mjs';
 import { resolvedTenant, identityStorageKey } from './access-policy.mjs';
 import {
   selectIdentityTenant, equal, makeReportSession, newCsrf, publicReportIdentity,
@@ -7,10 +8,11 @@ import {
 // Dependencies are injected so authentication and account isolation can be tested without live credentials.
 export function mountReportRoutes(app, {
   tenants, ready, origin, gate, csrf, save, regenerate, provider,
-  readBinding, createBinding, searchDashboards, createEmbed, describeUser,
+  readBinding, createBinding, searchDashboards, createEmbed, describeUser, listUsers, createAutomaticBinding,
   saveAttempt, consumeAttempt, deleteAttempt,
 }) {
   const byId = new Map(tenants.map(t => [t.id, t]));
+  const reservedArns = () => tenants.flatMap(t=>[t.pilotUserArn,...(t.identityMappings||[]).map(m=>m.quickSightUserArn)]).filter(Boolean);
   const clearReport = async req => {
     if (req.session.pendingReportLogin) await deleteAttempt(req.session.pendingReportLogin.state);
     const user = req.session.user;
@@ -19,9 +21,21 @@ export function mountReportRoutes(app, {
     req.session.csrf = newCsrf();
     await save(req);
   };
+  const resolveSession = async session => {
+    const base = byId.get(session?.tenantId);
+    if (!base) return {};
+    if (/^auto-[a-f0-9]{64}$/.test(session.mappingId || '')) {
+      const binding = await readBinding(`${base.id}#${session.mappingId}`);
+      if (reservedArns().includes(binding?.quickSightUserArn)) return {};
+      const tenant = resolvedAutomaticTenant(base, session.mappingId, binding);
+      if (!tenant || !automaticUserMatches(base, binding, await describeUser(tenant))) return {};
+      return {tenant,binding};
+    }
+    const tenant = resolvedTenant(base, session.mappingId);
+    return {tenant,binding:tenant ? await readBinding(identityStorageKey(tenant)) : undefined};
+  };
   const identity = async (req, res, next) => {
-    const tenant = resolvedTenant(byId.get(req.session.report?.tenantId), req.session.report?.mappingId);
-    const binding = tenant ? await readBinding(identityStorageKey(tenant)) : undefined;
+    const {tenant,binding} = await resolveSession(req.session.report);
     if (!validReportSession(tenant, binding, req.session.report)) {
       return res.status(401).json({ code: 'REPORT_LOGIN_REQUIRED', error: '请先登录报表账号。' });
     }
@@ -45,8 +59,7 @@ export function mountReportRoutes(app, {
   app.get('/auth/report/start', gate, async (req, res) => {
     // Switching is a CSRF-protected POST. This GET may only start an unauthenticated report login.
     if (req.session.report) {
-      const current = resolvedTenant(byId.get(req.session.report.tenantId), req.session.report.mappingId);
-      const binding = current ? await readBinding(identityStorageKey(current)) : undefined;
+      const {tenant:current,binding} = await resolveSession(req.session.report);
       if (validReportSession(current, binding, req.session.report)) return res.redirect('/');
     }
     const tenant = byId.get(req.query.tenant);
@@ -78,9 +91,24 @@ export function mountReportRoutes(app, {
     } catch {
       return failure(req, res, 'invalid_identity');
     }
-    tenant = selectIdentityTenant(tenant, claims);
+    const base = tenant;
+    tenant = selectIdentityTenant(base, claims);
+    let binding;
+    // Explicit mappings remain authoritative, including disabled mappings. No auto fallback for them.
+    const explicitlyConfigured = base.identityMappings?.some(m => [claims['cognito:username'],claims.preferred_username,
+      ...(claims.email_verified === true ? [claims.email] : [])].includes(m.login));
+    if (!tenant && !explicitlyConfigured && base.autoBinding?.enabled) {
+      try {
+        const result = await resolveAutomaticLogin(base, claims, {readBinding,createAutomaticBinding,listUsers,describeUser,
+          reservedArns:reservedArns()});
+        tenant=result.tenant; binding=result.binding;
+      } catch(e) {
+        if(e instanceof IdentityLinkError)return failure(req,res,e.code);
+        throw e;
+      }
+    }
     if (!tenant) return failure(req, res, 'identity_not_mapped');
-    let binding = await readBinding(identityStorageKey(tenant));
+    binding ||= await readBinding(identityStorageKey(tenant));
     if (!binding) {
       // Confirm that the explicitly approved enterprise principal is an active QuickSight user.
       const user = await describeUser(tenant);

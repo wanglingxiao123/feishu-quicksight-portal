@@ -1,3 +1,4 @@
+import { automaticTransaction } from './automatic-identity.mjs';
 import { mayEnter } from './access-policy.mjs';
 import { config } from 'dotenv';
 import express from 'express';
@@ -6,7 +7,7 @@ import helmet from 'helmet';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { mountReportRoutes } from './report-routes.mjs';
 import { createReportServices } from './report-services.mjs';
 import { validateTenant } from './portal-policy.mjs';
@@ -36,6 +37,7 @@ async function createOwner(identity) {
 }
 try { owner = await readOwner(); }
 catch (error) { if (error.code !== 'ENOENT') throw error; }
+if (!db && tenants.some(t => t.autoBinding?.enabled)) throw Error('Automatic identity requires persistent DynamoDB state');
 if (!env.SESSION_SECRET || !env.FEISHU_APP_SECRET) throw Error('Missing server credentials');
 const origin = () => {
   const value = env.PUBLIC_ORIGIN;
@@ -102,7 +104,7 @@ const feishu = async (path, options = {}) => {
   }
   return body;
 };
-app.get('/healthz', (_req, res) => res.json({ ok: true, version: '0.1.0', mode: 'verified-report-identity' }));
+app.get('/healthz', (_req, res) => res.json({ ok: true, version: '0.2.0', mode: 'verified-report-identity' }));
 app.get('/auth/enroll/:token', async (req, res) => {
   if (db) owner = await readOwner();
   if (owner || !safeEqual(req.params.token, env.ENROLLMENT_TOKEN)) return res.sendStatus(404);
@@ -201,6 +203,14 @@ mountReportRoutes(app, {
     }))).Item?.identity;
     try { return JSON.parse(await readFile(new URL(`report-identity-${encodeURIComponent(tenantId)}.json`, dataPath), 'utf8')); }
     catch (e) { if (e.code !== 'ENOENT') throw e; }
+  },
+  async createAutomaticBinding(identityKey, identity) {
+    if (db) {
+      try { await db.send(new TransactWriteCommand({TransactItems:automaticTransaction(env.STATE_TABLE,identityKey,identity)})); }
+      catch(e) { if(e.name !== 'TransactionCanceledException')throw e; }
+      return;
+    }
+    throw Error('Automatic identity requires persistent DynamoDB state');
   },
   async createBinding(tenantId, identity) {
     try {

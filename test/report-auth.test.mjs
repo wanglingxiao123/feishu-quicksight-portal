@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import express from 'express';
 import session from 'express-session';
 import { once } from 'node:events';
+import { automaticLockKey } from '../automatic-identity.mjs';
 import { randomUUID } from 'node:crypto';
 import { mountReportRoutes } from '../report-routes.mjs';
 import { approvedClaims, makeReportSession, validReportSession, validPending } from '../report-session.mjs';
@@ -20,7 +21,9 @@ async function harness(t) {
   const app = express(), store = new session.MemoryStore();
   app.use(express.json());
   app.use(session({ secret: randomUUID(), resave: false, saveUninitialized: false, store }));
-  const sessions = new Map(), bindings = new Map(), attempts = new Map();
+  const sessions = new Map(), bindings = new Map(), attempts = new Map(), locks = new Map();
+  let directory = [];
+  let liveUser;
   const calls = { search: [], embed: [], begin: [], finish: 0 };
   let rejected = false, disabled = false, badClaims, inactive = false;
   const save = req => new Promise((resolve, reject) => req.session.save(e => e ? reject(e) : resolve()));
@@ -49,7 +52,12 @@ async function harness(t) {
     },
     readBinding: async id => bindings.get(id),
     createBinding: async (id, binding) => { if (!bindings.has(id)) bindings.set(id, binding); },
-    describeUser: async current => ({ Arn: current.pilotUserArn, Active: !inactive }),
+    createAutomaticBinding: async (id,binding) => {
+      if(bindings.has(id)||locks.has(automaticLockKey(binding)))return;
+      bindings.set(id,binding);locks.set(automaticLockKey(binding),id);
+    },
+    listUsers: async () => directory,
+    describeUser: async current => liveUser || ({ Arn: current.pilotUserArn, Active: !inactive }),
     searchDashboards: async (current, binding) => {
       calls.search.push({ tenant: current.id, arn: binding.quickSightUserArn });
       return [{ id: `${current.id}${current.mappingId ? '-'+current.mappingId : ''}-dashboard`, name: `${current.label} private dashboard` }];
@@ -88,7 +96,7 @@ async function harness(t) {
     const callback = await request(`/auth/report/callback?code=test-code&state=${state}`);
     return { start, callback, state };
   };
-  return { request, login, calls, bindings, attempts,
+  return { request, login, calls, bindings, attempts, directory:users=>{directory=users;},liveUser:u=>{liveUser=u;},
     async expire() {
       const values = await new Promise((resolve, reject) => store.all((e, result) => e ? reject(e) : resolve(result)));
       for (const [sid, data] of Object.entries(values)) {
@@ -247,4 +255,23 @@ test('two mapped identities receive separate bindings and cannot embed each othe
   assert.equal(h.bindings.get('company-a#bob').subject,'subject-bob');
   tenant.identityMappings[1].enabled=false;
   assert.equal((await h.request('/api/me')).status,401);
+});
+
+
+test('automatic first login persists identity and serves the matched user only, with manual pilot unchanged',async t=>{
+ tenant.autoBinding={enabled:true,namespace:'default',allowedEmailDomains:['example.com']};
+ tenant.accountId='111111111111';tenant.region='us-east-1';
+ t.after(()=>{delete tenant.autoBinding;delete tenant.accountId;delete tenant.region;});
+ const h=await harness(t);
+ assert.equal((await h.login()).callback.location,'/'); // Existing explicit pilot still works.
+ await h.request('/api/me');
+ await h.request('/auth/report/clear','POST');
+ const user={Arn:tenant.pilotUserArn.replace('reader/alice','reader/bob'),PrincipalId:'principal-bob',Email:'bob@example.com',Active:true};
+ h.directory([user]);h.liveUser(user);h.claims({iss:tenant.issuer,sub:'subject-new-bob',email:'bob@example.com',email_verified:true,preferred_username:'bob'});
+ assert.equal((await h.login()).callback.location,'/');
+ assert.equal((await h.request('/api/me')).body.quickSightUsername,'reader/bob');
+ await h.request('/api/dashboards');assert.equal(h.calls.search.at(-1).arn,user.Arn);
+ assert.equal((await h.request('/api/dashboards/company-a-dashboard/embed','POST')).status,403);
+ h.liveUser({...user,PrincipalId:'recreated-user'});
+ assert.equal((await h.request('/api/me')).status,401);
 });

@@ -14,12 +14,12 @@
     "ready": false
   },
   "feishuAccessMode": "tenant",
-  "identityMappings": [
-    {
-      "id": "employee-001",
-      "login": "REPLACE_ME",
-      "quickSightUserArn": "arn:aws:quicksight:us-east-1:123456789012:user/default/REPLACE_ME",
-      "enabled": true
-    }
-  ]
+  "identityMappings": [],
+  "autoBinding": {
+    "enabled": true,
+    "namespace": "default",
+    "allowedEmailDomains": [
+      "example.com"
+    ]
+  }
 }

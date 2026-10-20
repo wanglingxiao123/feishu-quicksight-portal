@@ -1,11 +1,11 @@
 {
   "name": "feishu-quicksight-portal",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Feishu dashboard portal with verified per-user OIDC identity and scoped QuickSight embedding",
   "main": "index.js",
   "scripts": {
     "check": "node scripts/check.mjs",
-    "test": "node --test test/report-auth.test.mjs test/identity-preflight.test.mjs test/package.test.mjs test/access-policy.test.mjs",
+    "test": "node --test test/report-auth.test.mjs test/identity-preflight.test.mjs test/package.test.mjs test/access-policy.test.mjs test/automatic-identity.test.mjs",
     "test:ui": "node --test test/report-ui.test.mjs",
     "secrets:generate": "node scripts/generate-secrets.mjs",
     "package": "node scripts/package.mjs",

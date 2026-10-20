@@ -5,7 +5,7 @@ import { makeTemplate } from './template.mjs';
 const c=await readConfig();
 execFileSync('npm',['run','check'],{stdio:'inherit'});execFileSync('npm',['test'],{stdio:'inherit'});
 await rm('.build/runtime',{recursive:true,force:true});await mkdir('.build/runtime',{recursive:true});
-const files=['access-policy.mjs','server.mjs','handler.mjs','report-routes.mjs','report-session.mjs','report-services.mjs','portal-policy.mjs','package.json','package-lock.json'];
+const files=['automatic-identity.mjs','access-policy.mjs','server.mjs','handler.mjs','report-routes.mjs','report-session.mjs','report-services.mjs','portal-policy.mjs','package.json','package-lock.json'];
 for(const file of files)await copyFile(file,`.build/runtime/${file}`);
 await cp('public','.build/runtime/public',{recursive:true});
 await writeFile('.build/runtime/tenants.json',JSON.stringify([tenantFromConfig(c)],null,2));

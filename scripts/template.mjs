@@ -3,7 +3,10 @@ const ref=x=>({Ref:x}),sub=x=>({'Fn::Sub':x}),attr=(x,y)=>({'Fn::GetAtt':[x,y]})
 export function makeTemplate(c){
  const actions=baseline.Policies.flatMap(p=>p.Policy.Statement.flatMap(s=>[].concat(s.Action)));
  const qsActions=actions.filter(a=>a.startsWith('quicksight:'));
- if(qsActions.length!==3)throw Error('Review changed IAM baseline before building');
+ if(qsActions.length!==4)throw Error('Review changed IAM baseline before building');
+ const userResources = c.autoBinding?.enabled
+  ? [...new Set([`arn:aws:quicksight:${c.region}:${c.awsAccountId}:user/${c.autoBinding.namespace}/*`,...(c.identityMappings||[]).filter(m=>m.enabled!==false).map(m=>m.quickSightUserArn),...(c.quickSightUserArn?[c.quickSightUserArn]:[])])]
+  : (c.identityMappings?.length?c.identityMappings.filter(m=>m.enabled!==false).map(m=>m.quickSightUserArn):c.quickSightUserArn);
  const origin=sub('https://${PortalApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}');
  const secret=k=>`{{resolve:secretsmanager:${c.runtimeSecretArn}:SecretString:${k}}}`;
  const resources={
@@ -12,7 +15,7 @@ export function makeTemplate(c){
  PortalLogs:{Type:'AWS::Logs::LogGroup',DeletionPolicy:'Retain',UpdateReplacePolicy:'Retain',Properties:{LogGroupName:sub('/aws/lambda/${AWS::StackName}-app'),RetentionInDays:14}},
  PortalRole:{Type:'AWS::IAM::Role',Properties:{AssumeRolePolicyDocument:{Version:'2012-10-17',Statement:[{Effect:'Allow',Principal:{Service:'lambda.amazonaws.com'},Action:'sts:AssumeRole'}]},Policies:[{PolicyName:'PortalRuntime',PolicyDocument:{Version:'2012-10-17',Statement:[
  {Effect:'Allow',Action:actions.filter(a=>['dynamodb:GetItem','dynamodb:PutItem','dynamodb:DeleteItem'].includes(a)),Resource:attr('StateTable','Arn')},
- ...qsActions.map(a=>({Effect:'Allow',Action:a,Resource:a==='quicksight:SearchDashboards'?`arn:aws:quicksight:${c.region}:${c.awsAccountId}:dashboard/*`:(c.identityMappings?.length?c.identityMappings.filter(m=>m.enabled!==false).map(m=>m.quickSightUserArn):c.quickSightUserArn),...(a==='quicksight:GenerateEmbedUrlForRegisteredUser'?{Condition:{'ForAllValues:StringEquals':{'quicksight:AllowedEmbeddingDomains':[origin]},Null:{'quicksight:AllowedEmbeddingDomains':'false'}}}:{})})),
+ ...qsActions.filter(a=>a!=='quicksight:ListUsers'||c.autoBinding?.enabled).map(a=>({Effect:'Allow',Action:a,Resource:a==='quicksight:SearchDashboards'?`arn:aws:quicksight:${c.region}:${c.awsAccountId}:dashboard/*`:(a==='quicksight:ListUsers'?`arn:aws:quicksight:${c.region}:${c.awsAccountId}:user/${c.autoBinding.namespace}/*`:userResources),...(a==='quicksight:GenerateEmbedUrlForRegisteredUser'?{Condition:{'ForAllValues:StringEquals':{'quicksight:AllowedEmbeddingDomains':[origin]},Null:{'quicksight:AllowedEmbeddingDomains':'false'}}}:{})})),
  {Effect:'Allow',Action:['logs:CreateLogStream','logs:PutLogEvents'],Resource:attr('PortalLogs','Arn')},
  ]}}]}},
  PortalFunction:{Type:'AWS::Serverless::Function',Properties:{FunctionName:sub('${AWS::StackName}-app'),Runtime:'nodejs22.x',Architectures:['arm64'],Handler:'handler.handler',CodeUri:'runtime/',MemorySize:512,Timeout:30,Role:attr('PortalRole','Arn'),Environment:{Variables:{
@@ -21,7 +24,7 @@ export function makeTemplate(c){
  REPORT_OIDC_CLIENT_ID:c.oidc.clientId,REPORT_AUTH_READY:String(c.oidc.ready),
  }},Events:{Root:{Type:'HttpApi',Properties:{ApiId:ref('PortalApi'),Path:'/',Method:'ANY'}},Proxy:{Type:'HttpApi',Properties:{ApiId:ref('PortalApi'),Path:'/{proxy+}',Method:'ANY'}}}}},
  };
- const contexts={StateTable:['Persist sessions and the per-user identities across code releases',['Retain on stack removal; do not reuse for another customer']],PortalApi:['HTTPS entry and stable callback origin',['Do not log auth query strings or embed URLs']],PortalLogs:['Runtime diagnostics without credentials',['Retain logs for 14 days']],PortalRole:['Scope generated SDK baseline to this table and explicit QuickSight users',['No anonymous or subscription operations; embed only on application origin']],PortalFunction:['Serve frontend, Feishu gate and OIDC dashboard APIs',['Same-account commercial AWS deployment only; credentials via dynamic references']]};
+ const contexts={StateTable:['Persist sessions and the per-user identities across code releases',['Retain on stack removal; do not reuse for another customer']],PortalApi:['HTTPS entry and stable callback origin',['Do not log auth query strings or embed URLs']],PortalLogs:['Runtime diagnostics without credentials',['Retain logs for 14 days']],PortalRole:['Scope generated SDK baseline to this table and configured namespace and explicit QuickSight exceptions',['No anonymous or subscription operations; embed only on application origin']],PortalFunction:['Serve frontend, Feishu gate and OIDC dashboard APIs',['Same-account commercial AWS deployment only; credentials via dynamic references']]};
  for(const [id,[why,must]]of Object.entries(contexts))resources[id].Metadata={'com.aws.cloudformation.Context':{why,must}};
  return {AWSTemplateFormatVersion:'2010-09-09',Transform:'AWS::Serverless-2016-10-31',Description:'Feishu QuickSight dashboard portal. Registered-user embedding, OIDC identity and persistent authorization; no anonymous or public access.',Metadata:{AWSToolsMetrics:{AWSAgentToolkit:'aws-cloudformation@3'}},Resources:resources,Outputs:{
  ApplicationUrl:{Value:origin},FeishuCallback:{Value:sub('https://${PortalApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/auth/callback')},ReportCallback:{Value:sub('https://${PortalApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/auth/report/callback')},FunctionName:{Value:ref('PortalFunction')},StateTableName:{Value:ref('StateTable')},

@@ -1,12 +1,12 @@
 import * as oidc from 'openid-client';
 import { fromTemporaryCredentials } from '@aws-sdk/credential-providers';
 import {
-  QuickSightClient, paginateSearchDashboards, GenerateEmbedUrlForRegisteredUserCommand, DescribeUserCommand,
+  QuickSightClient, paginateListUsers, paginateSearchDashboards, GenerateEmbedUrlForRegisteredUserCommand, DescribeUserCommand,
 } from '@aws-sdk/client-quicksight';
 
 export function createReportServices(env, origin) {
   const providers = new Map(), clients = new Map();
-  const ready = tenant => Boolean(tenant.issuer && (tenant.pilotLogin || tenant.identityMappings?.length) && env[tenant.clientIdEnv]
+  const ready = tenant => Boolean(tenant.issuer && (tenant.pilotLogin || tenant.identityMappings?.length || tenant.autoBinding?.enabled) && env[tenant.clientIdEnv]
     && env[tenant.readyEnv] === 'true');
   const configuration = async tenant => {
     if (!ready(tenant)) throw Error('ReportIdentityNotConfigured');
@@ -59,11 +59,18 @@ export function createReportServices(env, origin) {
         return tokens.claims();
       },
     },
+    async listUsers(tenant) {
+      const users=[];
+      for await (const page of paginateListUsers({client:client(tenant)}, {
+        AwsAccountId:tenant.accountId,Namespace:tenant.autoBinding.namespace,MaxResults:100,
+      })) users.push(...(page.UserList||[]));
+      return users;
+    },
     async describeUser(tenant) {
       const [namespace, ...name] = tenant.pilotUserArn.split(':user/')[1].split('/');
-      return (await client(tenant).send(new DescribeUserCommand({
+      try { return (await client(tenant).send(new DescribeUserCommand({
         AwsAccountId: tenant.accountId, Namespace: namespace, UserName: name.join('/'),
-      }))).User;
+      }))).User; } catch(e) { if(e.name==='ResourceNotFoundException')return undefined; throw e; }
     },
     async searchDashboards(tenant, binding) {
       const dashboards = [];

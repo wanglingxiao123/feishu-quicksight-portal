@@ -8,10 +8,12 @@
           {
             "Effect": "Allow",
             "Action": [
+              "dynamodb:ConditionCheckItem",
               "dynamodb:DeleteItem",
               "dynamodb:GetItem",
               "dynamodb:PutItem",
               "dynamodb:ReadDataForReplication",
+              "dynamodb:UpdateItem",
               "dynamodb:WriteDataForReplication"
             ],
             "Resource": [
@@ -39,6 +41,7 @@
             "Action": [
               "quicksight:DescribeUser",
               "quicksight:GenerateEmbedUrlForRegisteredUser",
+              "quicksight:ListUsers",
               "quicksight:SearchDashboards"
             ],
             "Resource": [
