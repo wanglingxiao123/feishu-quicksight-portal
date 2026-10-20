@@ -1,0 +1,25 @@
+{
+  "stackName": "feishu-report-portal",
+  "region": "us-east-1",
+  "awsAccountId": "123456789012",
+  "feishuAppId": "cli_REPLACE_ME",
+  "runtimeSecretArn": "arn:aws:secretsmanager:us-east-1:123456789012:secret:REPLACE_ME",
+  "accountLabel": "企业报表",
+  "oidc": {
+    "provider": "cognito",
+    "issuer": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_REPLACE_ME",
+    "userPoolId": "us-east-1_REPLACE_ME",
+    "authorizationOrigin": "https://REPLACE_ME.auth.us-east-1.amazoncognito.com",
+    "clientId": "",
+    "ready": false
+  },
+  "feishuAccessMode": "tenant",
+  "identityMappings": [
+    {
+      "id": "employee-001",
+      "login": "REPLACE_ME",
+      "quickSightUserArn": "arn:aws:quicksight:us-east-1:123456789012:user/default/REPLACE_ME",
+      "enabled": true
+    }
+  ]
+}

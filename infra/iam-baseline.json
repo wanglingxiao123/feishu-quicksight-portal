@@ -1,0 +1,54 @@
+{
+  "Policies": [
+    {
+      "Policy": {
+        "Id": "IamPolicyAutopilot",
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "dynamodb:DeleteItem",
+              "dynamodb:GetItem",
+              "dynamodb:PutItem",
+              "dynamodb:ReadDataForReplication",
+              "dynamodb:WriteDataForReplication"
+            ],
+            "Resource": [
+              "arn:*:dynamodb:*:*:table/*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "kms:Decrypt"
+            ],
+            "Resource": [
+              "arn:*:kms:*:*:key/*"
+            ],
+            "Condition": {
+              "StringLike": {
+                "kms:ViaService": [
+                  "dynamodb.*.amazonaws.com"
+                ]
+              }
+            }
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "quicksight:DescribeUser",
+              "quicksight:GenerateEmbedUrlForRegisteredUser",
+              "quicksight:SearchDashboards"
+            ],
+            "Resource": [
+              "arn:*:quicksight:*:*:dashboard/*",
+              "arn:*:quicksight:*:*:user/*"
+            ]
+          }
+        ]
+      },
+      "PolicyType": "Identity"
+    }
+  ]
+}

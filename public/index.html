@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>报表中心 · QuickSight</title>
+  <link rel="stylesheet" href="/style.css?v=ui-2.2.1">
+  <script src="/app.js?v=ui-2.2.1" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳转到内容</a>
+  <header class="app-header">
+    <a href="/" class="brand"><span class="brand-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 17V11M12 17V6M19 17V9"/></svg></span><span>报表中心<small>QuickSight</small></span></a>
+    <div class="account"><span class="badge"><i></i>测试版</span>
+      <details id="profile" class="profile" hidden>
+        <summary aria-label="个人中心"><span id="profile-avatar" class="profile-avatar">我</span><span id="profile-name">个人中心</span><span aria-hidden="true">⌄</span></summary>
+        <div class="profile-panel">
+          <strong>个人中心</strong>
+          <span class="profile-label">QuickSight 用户</span><span id="profile-identity"></span>
+          <span class="profile-label">QuickSight 账户</span><span id="profile-company"></span>
+          <div class="profile-divider"></div>
+          <button id="switch-account">切换账号 <span aria-hidden="true">⇄</span></button>
+          <button id="logout" hidden>退出应用</button>
+        </div>
+      </details>
+    </div>
+  </header>
+  <main id="main">
+    <section id="login" hidden class="login">
+      <div class="login-story">
+        <span class="eyebrow">QUICKSIGHT · 报表中心</span>
+        <h1>你的报表，<br>触手可及。</h1>
+        <p>从这里出发，查看数据、探索趋势。<br>专注于每一次分析。</p>
+        <div class="report-illustration" aria-hidden="true"><div class="illustration-heading"><span></span><i></i></div><div class="illustration-layout"><div class="illustration-bars"><i></i><i></i><i></i><i></i><i></i></div><div class="illustration-ring"></div></div><div class="illustration-lines"><i></i><i></i></div></div>
+      </div>
+      <div class="login-form">
+        <span class="login-mark" aria-hidden="true">↗</span>
+        <h2>登录报表中心</h2>
+        <p id="login-description">登录报表账号，查看你有权限访问的报表。</p>
+        <div id="account-choice" class="login-account" hidden>
+          <label for="account-picker">QuickSight 账户</label>
+          <select id="account-picker" aria-describedby="login-note"></select>
+        </div>
+        <a id="login-button" class="primary" aria-disabled="true">登录 <span aria-hidden="true">→</span></a>
+        <p id="login-note" class="note" role="status"></p>
+        <p class="login-access">仅限获授权的企业用户访问</p>
+      </div>
+    </section>
+    <section id="catalog" hidden>
+      <div class="intro"><div><span class="eyebrow">你的数据工作台</span><h1>我的报表</h1><p>查看当前账号有权限访问的 QuickSight 报表。</p></div><button id="refresh"><span aria-hidden="true">↻</span> 刷新列表</button></div>
+      <div class="catalog-panel">
+        <div class="toolbar">
+          <label class="search-field"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input id="search" type="search" placeholder="搜索报表名称" aria-label="搜索报表"></label>
+          <div class="toolbar-options"><label class="sort-label" for="sort">排序</label><select id="sort" aria-label="报表排序"><option value="asc">名称 A → Z</option><option value="desc">名称 Z → A</option></select><div class="view-switch" role="group" aria-label="显示方式"><button id="grid-view" aria-label="卡片视图" title="卡片视图" aria-pressed="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6"/><rect x="14" y="4" width="6" height="6"/><rect x="4" y="14" width="6" height="6"/><rect x="14" y="14" width="6" height="6"/></svg></button><button id="list-view" aria-label="列表视图" title="列表视图" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.1M4 12h.1M4 18h.1"/></svg></button></div></div>
+        </div>
+        <div class="results-heading"><span>全部报表</span><span id="count" aria-live="polite"></span></div>
+        <div id="cards" class="cards"></div>
+        <div id="empty-state" class="empty-state" hidden><span class="empty-icon" aria-hidden="true">⌕</span><h2 id="empty-title"></h2><p id="empty-description"></p><button id="clear-search" hidden>清除搜索</button></div>
+      </div>
+    </section>
+    <section id="viewer" hidden>
+      <div class="viewer-heading"><button id="back">← <span>所有报表</span></button><div class="viewer-title"><span>正在查看</span><h1 id="dashboard-title"></h1></div><div class="viewer-actions"><button id="reload" title="重新加载报表">↻ <span>重新加载</span></button><button id="expand" aria-pressed="false">展开视图</button></div></div>
+      <p id="frame-hint" role="status"></p>
+      <iframe id="dashboard-frame" title="QuickSight 报表" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen hidden></iframe>
+    </section>
+    <div id="status" role="status" aria-live="polite">正在检查登录状态…</div>
+  </main>
+  <footer>QuickSight 报表中心</footer>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{
+  "name": "feishu-quicksight-portal",
+  "version": "0.1.0",
+  "description": "Feishu dashboard portal with verified per-user OIDC identity and scoped QuickSight embedding",
+  "main": "index.js",
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "node --test test/report-auth.test.mjs test/identity-preflight.test.mjs test/package.test.mjs test/access-policy.test.mjs",
+    "test:ui": "node --test test/report-ui.test.mjs",
+    "secrets:generate": "node scripts/generate-secrets.mjs",
+    "package": "node scripts/package.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "outputs": "node scripts/outputs.mjs",
+    "verify:identity": "node scripts/verify-identity.mjs"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-apigatewayv2": "^3.1152.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.1152.0",
+    "@aws-sdk/client-dynamodb": "^3.1152.0",
+    "@aws-sdk/client-iam": "^3.1152.0",
+    "@aws-sdk/client-lambda": "^3.1152.0",
+    "@aws-sdk/client-quicksight": "^3.1152.0",
+    "@aws-sdk/client-sts": "^3.1152.0",
+    "@aws-sdk/credential-providers": "^3.1152.0",
+    "@aws-sdk/lib-dynamodb": "^3.1152.0",
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
+    "openid-client": "^6.8.8",
+    "serverless-http": "^4.0.0"
+  },
+  "private": true,
+  "devDependencies": {
+    "@aws-sdk/client-cloudformation": "^3.1152.0",
+    "playwright": "^1.56.0"
+  }
+}
