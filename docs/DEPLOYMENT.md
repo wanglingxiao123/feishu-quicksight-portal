@@ -10,11 +10,17 @@
 | 同账户同区域的 QuickSight Enterprise 环境 | 提供已发布仪表盘；每位测试人员有自己的 QuickSight 用户及授权 |
 | 现有 Cognito 用户池，或已对接企业身份源的 Keycloak Realm | 验证登录身份；本项目不创建用户池、Keycloak 或企业目录 |
 | 飞书自建应用开发权限及发布审核人 | 创建应用和发布测试版本 |
-| Node.js 22.12+、npm、Git、AWS SAM CLI | 安装、打包和部署 |
+| Node.js 22.12+、npm、Git、AWS CLI v2（本文使用 2.32.0+）、AWS SAM CLI | 安装、打包和部署 |
 
 AWS 资源和 Secrets Manager 会产生费用。本项目不替你购买 QuickSight 容量套餐。部署身份需要相应 CloudFormation、制品桶、IAM、Lambda、API Gateway、DynamoDB、CloudWatch Logs 权限，以及解析指定 Secrets Manager secret 的权限；客户应按自身权限流程授权。应用的运行角色由模板单独创建，不继承部署身份权限。
 
 部署权限及可复制的 JSON 见 [README：部署前，由管理员配置 AWS 权限](../README.md#部署前由管理员配置-aws-权限)。该策略授予部署身份，运行角色由模板单独创建；准备密钥、Cognito 客户端和 QuickSight 用户由对应管理员完成。
+
+## 先完成本机 AWS 登录
+
+按 [README：本机准备与 AWS 登录](../README.md#本机准备与-aws-登录首次部署按这里操作) 安装并检查工具，选择企业 SSO 或控制台身份登录路线，创建或复用 profile，运行身份查询，核对账户、角色及区域。本指南后续统一用 `portal-deploy`；复用公司已有 profile 时，将此名称替换为你验证通过的 profile。浏览器已登录 AWS 控制台不能代替这一步。
+
+完成标志：README 中的身份查询成功，且管理员已为同一部署身份准备部署权限。普通员工无需执行部署或本机 AWS 登录。
 
 ## 步骤 1：创建空的飞书企业自建应用
 
@@ -77,12 +83,12 @@ Keycloak issuer 格式：`https://sso.example.com/realms/REALM`。
 
 ### 2.4 打包、检查并部署
 
-先在本机完成组织允许的 AWS 登录，确保目标 profile 可用。将下方 `your-profile` 换成自己的 profile 名。
+先完成上方“本机 AWS 登录”。以下命令使用同一 profile `portal-deploy`；若用了其他名字，统一替换。请在有 `package.json`、`config.local.json` 的工程目录执行；不要在任意目录运行。
 
 ```bash
 npm run package
-npm run deploy -- --profile your-profile
-npm run outputs -- --profile your-profile
+npm run deploy -- --profile portal-deploy
+npm run outputs -- --profile portal-deploy
 ```
 
 `package` 只复制运行时文件并安装生产依赖；不会上传 `.env`、本地秘密、测试记录或 Git 历史。
@@ -103,14 +109,14 @@ npm run outputs -- --profile your-profile
 5. 登录成功的允许回调 URL：填写步骤 2 输出的 **ReportCallback**。
 6. 保存 Client ID，填入 `config.local.json` 的 `oidc.clientId`。
 
-现有用户池可能需要管理员配置登录页面、允许的身份源和测试用户状态。不要覆盖其他应用已有的回调地址。本仓库按 Cognito 的 `cognito:username` 匹配用户，不按飞书姓名猜测。
+现有用户池可能需要管理员配置登录页面、允许的身份源和测试用户状态。不要覆盖其他应用已有的回调地址。默认自动关联使用登录系统返回的已验证邮箱匹配 QuickSight 用户；只有显式人工例外／历史配置才按 `cognito:username` 选择预设关联，不按飞书姓名猜测。
 
 ### 3.2 已有 Keycloak 时
 
 1. 登录管理后台，进入业务 Realm，不要直接使用 `master`。
 2. Clients → 创建专用 OpenID Connect 客户端；启用 Standard flow，关闭 Client authentication，PKCE 使用 S256。
 3. Valid redirect URIs 填写 **ReportCallback**；使用精确 HTTPS 地址，禁止 `*`。
-4. 确保 token 中有 `sub` 和用于映射的 `preferred_username`，或已验证的 `email`；提供 `openid profile email` scopes。
+4. 默认自动关联要求 token 中有 `sub`、`email`，且 `email_verified` 为布尔值 `true`；提供 `openid profile email` scopes。仅有 `preferred_username` 不满足默认邮箱自动关联规则。
 5. 如果 Realm 已通过 Identity Provider 对接飞书，可复用该认证来源，但必须为本报表应用新建专用客户端。
 6. 填写 Keycloak issuer 和 Client ID，并将 `oidc.provider` 改为 `keycloak`。
 
@@ -147,8 +153,8 @@ Quick Desktop 示例中的 `http://localhost:18080` 是桌面客户端回调，*
 
 ```bash
 npm run package
-npm run verify:identity -- --profile your-profile
-npm run deploy -- --profile your-profile
+npm run verify:identity -- --profile portal-deploy
+npm run deploy -- --profile portal-deploy
 ```
 
 自动模式的运行权限限定在指定账户、区域和 namespace 的用户资源，并允许读取用户目录。嵌入链接仍限定应用域名；个人可见报表仍由自己的 QuickSight 用户权限决定。

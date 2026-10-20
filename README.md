@@ -6,7 +6,7 @@
 
 > **给 AI Agent 的部署提示词**（复制以下整段，并把本仓库提供给 Agent）：
 >
-> 请阅读本仓库 README、AGENTS.md、config/example.json 和 docs/DEPLOYMENT.md，协助我部署飞书 QuickSight 报表中心。先检查依赖和配置，整理缺少的信息，再开始实施。按“创建空的飞书企业自建应用 → 在我的 AWS 账户部署应用并取得 HTTPS 地址 → 配置 Cognito/Keycloak 登录回调和已验证邮箱的自动关联规则 → 配置飞书入口与登录回调 → 先向测试人员发布 → 验收后扩大飞书可用范围”的顺序操作。使用我的 AWS 账户、区域、用户池、客户端和报表用户；不要使用示例标识或通过未验证邮箱猜测用户身份。不要读取或输出密码、App Secret、会话 Cookie、OIDC token、首次登记令牌和报表嵌入链接；指导我将秘密放入本地忽略文件和 Secrets Manager。先列出将创建的资源，展示 CloudFormation change set，由我确认实际部署。不要改变 QuickSight 计费套餐、开启报表互联网公开访问，或让多人共用管理员的 QuickSight 身份。完成后核对两个回调地址、两名用户的权限隔离、连续打开两张报表及飞书多端体验；明确区分实际验证、自动化模拟验证和待验证项。我的环境如果不满足支持范围，请说明缺口，不要声称部署成功。
+> 请阅读本仓库 README、AGENTS.md、config/example.json 和 docs/DEPLOYMENT.md，协助我部署飞书 QuickSight 报表中心。先阅读 README 的“本机准备与 AWS 登录”并按当前企业环境选择登录路线，检查依赖、AWS profile 的账户／角色／区域和配置，整理缺少的信息，再开始实施。按“创建空的飞书企业自建应用 → 在我的 AWS 账户部署应用并取得 HTTPS 地址 → 配置 Cognito/Keycloak 登录回调和已验证邮箱的自动关联规则 → 配置飞书入口与登录回调 → 先向测试人员发布 → 验收后扩大飞书可用范围”的顺序操作。使用我的 AWS 账户、区域、用户池、客户端和报表用户；不要使用示例标识或通过未验证邮箱猜测用户身份。不要读取或输出密码、App Secret、会话 Cookie、OIDC token、首次登记令牌和报表嵌入链接；指导我将秘密放入本地忽略文件和 Secrets Manager。先列出将创建的资源，展示 CloudFormation change set，由我确认实际部署。不要改变 QuickSight 计费套餐、开启报表互联网公开访问，或让多人共用管理员的 QuickSight 身份。完成后核对两个回调地址、两名用户的权限隔离、连续打开两张报表及飞书多端体验；明确区分实际验证、自动化模拟验证和待验证项。我的环境如果不满足支持范围，请说明缺口，不要声称部署成功。
 
 ## 先看当前支持范围
 
@@ -24,9 +24,11 @@
 
 ### 验证状态
 
-原应用的 Cognito 登录及注册用户报表嵌入曾完成真实环境验证。本仓库是移除个人配置后整理的交付版本，多用户隔离、首次登录自动关联、重复登录复用、邮箱变化与身份冲突已有自动化测试。**本次没有在第二个全新 AWS 账户实际部署，也没有用两名真实员工完成联调；Keycloak、飞书手机 WebView 仍需按验收清单验证。**
+原应用的 Cognito 登录及注册用户报表嵌入曾完成真实环境验证。本仓库是移除个人配置后整理的交付版本，多用户隔离、首次登录自动关联、重复登录复用、邮箱变化与身份冲突已有自动化测试。**待验收：第二个全新 AWS 账户部署、两名真实员工联调、企业 Keycloak，以及飞书手机 WebView。**
 
 ## 从哪里开始
+
+部署人员先完成下方[本机准备与 AWS 登录](#本机准备与-aws-登录首次部署按这里操作)和 IAM 授权，再按五步创建应用。登录不要求先下载代码；登录后也不应直接跳过配置就运行部署。
 
 完整逐步操作见 [部署指南](docs/DEPLOYMENT.md)。请按以下顺序执行，不能跳过第一步：
 
@@ -36,9 +38,189 @@
 4. **配置飞书入口**：填入应用首页和飞书登录回调，发布给测试人员。
 5. **登记允许的飞书企业并验收**：管理员完成首次登记，两名测试人员验证各自权限；通过后再扩大发布范围。
 
+## 本机准备与 AWS 登录：首次部署按这里操作
+
+**本节只由部署人员执行一次；普通员工直接在飞书使用应用，不安装这些工具。**“在本机部署”指从电脑把应用发布到 AWS；应用随后在云端运行，电脑关机不影响员工访问。
+
+浏览器能打开 AWS 控制台，不代表终端里的 Node.js、AWS CLI 和 SAM 已获得凭据。本节的完成目标是：在同一个终端中，用同一个 **profile** 验证正确的 AWS 账户和角色，并把它交给部署命令。profile 是本机保存 AWS 登录配置的名字，本文统一叫 `portal-deploy`，与 QuickSight 账户名称、飞书账号无关。
+
+### 先拿齐这四项资料
+
+| 向 AWS 管理员确认 | 例子／用途 |
+|---|---|
+| 部署目标 AWS 账户 ID | 12 位数字；后面必须与 `config.local.json` 的 `awsAccountId` 相同 |
+| 应用与 QuickSight 的部署区域 | 例如 `us-east-1`，以目标 QuickSight 所在区域为准 |
+| 被授权的部署角色／权限集 | 须具备下节部署策略中的权限；只读角色不能创建应用 |
+| 本机登录方式 | IAM Identity Center 的 SSO；或允许 `aws login` 的控制台身份；或公司指定的本机凭据工具 |
+
+选择 Identity Center 路线时，还需要 **SSO Start URL 和 SSO Region**。可在企业 AWS 访问门户选择目标账户／权限集旁的 “Access keys／访问密钥” → “IAM Identity Center credentials” 查看，或向管理员索取。这一步只记录 Start URL 和 Region，不复制临时密钥。**SSO Region 是 Identity Center 所在区域，可能与应用部署区域不同；Cognito issuer 和 QuickSight 登录链接都不是 SSO Start URL。**
+
+### 1｜安装工具并确认终端能找到它们
+
+本指南部署命令使用 macOS／Linux 的终端。macOS 打开“终端”；Linux 打开 Terminal。Windows 用户应在同一套 WSL2 Linux 环境中安装工具、下载工程、登录及部署，不混用 Windows 和 WSL 的凭据目录；原生 Windows 部署脚本尚未验收。
+
+| 工具 | 安装入口与选择 | 安装后检查 |
+|---|---|---|
+| Node.js 与 npm | [Node.js 官方下载](https://nodejs.org/en/download)：选 Node.js 22 的 22.12 或更高补丁版本，安装包包含 npm | `node --version`、`npm --version` |
+| Git | [Git 官方安装](https://git-scm.com/install/)：选择本机系统 | `git --version` |
+| AWS CLI v2 | [AWS CLI 官方安装](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)：macOS 可下载 PKG，Linux 按实际 CPU 架构安装；本文统一要求 2.32.0 或更高版本 | `aws --version` |
+| AWS SAM CLI | [SAM 官方安装](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)：Mac 的 Apple Silicon 选 arm64，Intel 选 x86_64；Linux 同样区分架构 | `sam --version` |
+
+安装完成后关闭并重新打开终端，逐条执行：
+
+```bash
+node --version
+npm --version
+git --version
+aws --version
+sam --version
+```
+
+**完成标志：**五条命令均显示版本。`node` 至少为 `v22.12.0`，AWS CLI 显示 `aws-cli/2.…` 且不低于 2.32.0。出现 `command not found` 时先按对应安装页面处理 PATH，不继续部署。按官方独立安装包安装 SAM 时通常不需要另行管理它内置的 Python；当前 npm 打包流程不使用 Docker。
+
+### 2｜选择符合企业环境的登录方式，只执行一条路线
+
+已有公司规定的凭据工具／profile 时，继续使用它，按公司的流程刷新凭据，然后直接做第 3 节验证；部署命令中的 `portal-deploy` 全部换成该 profile 名称。不知道公司采用哪一种时，将本节四项资料清单交给 AWS 管理员确认，不要把报表登录的 Cognito 账号填进 AWS CLI。
+
+可先列出已有 profile 名称，不会输出密钥：
+
+```bash
+aws configure list-profiles
+```
+
+如果下文示例名已被其他项目使用，请换一个新的名字，并在后续命令中一致使用，不覆盖原配置。
+
+<details open>
+<summary><strong>路线 A：公司已使用 IAM Identity Center（企业 AWS SSO）</strong></summary>
+
+第一次在本机配置，运行：
+
+```bash
+aws configure sso --profile portal-deploy
+```
+
+按终端问题逐项填写；下表是说明，不是让你整段复制进终端：
+
+| 终端提示 | 填什么 |
+|---|---|
+| `SSO session name` | 自定义会话名，例如 `portal-sso` |
+| `SSO start URL` | 管理员提供的企业 AWS 访问门户地址 |
+| `SSO region` | 管理员提供的 Identity Center 所在区域 |
+| `SSO registration scopes` | 接受默认 `sso:account:access` |
+| 浏览器授权 | 用自己的企业身份登录，核对 AWS CLI 授权请求后确认 |
+| AWS account | 选择准备清单中的 12 位目标账户；只有一个选项时可能自动跳过 |
+| IAM role／permission set | 选择管理员授权用于本应用部署的角色，不能选只读角色；单一选项也可能跳过 |
+| `Default client Region`／`CLI default client Region` | 应用部署区域，与后续 `config.local.json` 的 `region` 一致 |
+| `CLI default output format` | `json`；某些版本不询问此项 |
+| Profile name（如出现） | `portal-deploy`；命令已指定名称时可能不再询问 |
+
+完成配置后执行：
+
+```bash
+aws sso login --profile portal-deploy
+```
+
+浏览器登录／授权成功后返回终端，看到登录成功提示，再进入第 3 节验证。以后会话过期，只需再次运行 `aws sso login --profile portal-deploy`，不用每次重建 profile。
+
+浏览器无法自动打开时，按终端提示在本机打开授权地址；跨设备授权可使用：
+
+```bash
+aws sso login --profile portal-deploy --use-device-code
+```
+
+**这条路线不需要运行 `aws login`，也不要求附加 `SignInLocalDevelopmentAccess`。**
+
+</details>
+
+<details>
+<summary><strong>路线 B：公司允许使用现有 AWS 控制台身份进行本机登录</strong></summary>
+
+适用于 IAM 用户或通过企业联合身份进入 AWS 控制台、且管理员允许 `aws login` 的环境。IAM Identity Center 用户走路线 A。这里使用管理员提供的部署身份，不需要新建 Access Key。
+
+1. 管理员在该 IAM 用户／角色上授予 AWS 托管策略 `SignInLocalDevelopmentAccess`（或符合企业限制的等效权限）。这只允许本机登录，**不替代下面的资源部署策略**。
+2. 运行以下命令；新 profile 提示 Region 时填写目标应用区域：
+
+```bash
+aws login --profile portal-console
+```
+
+3. 浏览器打开后选择正确 AWS 账户和部署身份，完成授权，再返回终端。只有浏览器显示控制台首页而终端仍在等待时，登录步骤尚未完成。
+4. 为避免 SAM 或其他工具版本不支持新的登录缓存，创建统一的 `portal-deploy` profile，由 AWS CLI 自动为工具提供临时凭据。下面第二条中的 `us-east-1` 必须换成自己的应用区域：
+
+```bash
+aws configure set credential_process "aws configure export-credentials --profile portal-console --format process" --profile portal-deploy
+aws configure set region us-east-1 --profile portal-deploy
+aws configure set output json --profile portal-deploy
+```
+
+第一条只是保存“由 AWS CLI 提供凭据”的配置，**不要另外单独运行里面的 `export-credentials` 子命令或把凭据输出贴进聊天／文档**。`portal-console` 保存浏览器登录，`portal-deploy` 供本项目部署使用；两个 profile 名称不能写成同一个，以免递归调用。
+
+完成后进入第 3 节验证。以后会话过期，重新执行 `aws login --profile portal-console`，不需要重建 `portal-deploy`。浏览器不在同一设备时可使用 `aws login --profile portal-console --remote`，只在本机终端按提示填写授权码。
+
+</details>
+
+### 3｜验证实际 AWS 账户、角色与区域
+
+在之后执行部署命令的同一个终端中运行：
+
+```bash
+aws sts get-caller-identity --profile portal-deploy --query '{Account:Account,Arn:Arn}' --output json --no-cli-pager
+aws configure get region --profile portal-deploy
+```
+
+第一条成功时会显示类似下面的身份信息，不包含密码或访问密钥。下例均为虚构值：
+
+```json
+{
+  "Account": "111122223333",
+  "Arn": "arn:aws:sts::111122223333:assumed-role/PortalDeploymentRole/example-session"
+}
+```
+
+逐项检查：
+
+- `Account` 等于管理员给你的目标账户 ID，之后将同一值填入 `config.local.json` 的 `awsAccountId`。
+- `Arn` 对应被授权的部署角色／用户。即使账户相同，使用了只读角色也不能部署；IAM 用户登录时 ARN 格式与上面的角色示例不同。
+- 第二条显示的区域，与目标 QuickSight 区域及后续配置的 `region` 一致。SSO 的 `sso_region` 可以不同。
+
+账户或角色错误时回到所选登录路线重新选择；**不要为了通过检查，把项目配置改成错误账户。**区域错误时用 `aws configure set region 你的实际区域 --profile portal-deploy` 修正，再检查一次。
+
+**完成标志：**身份查询成功，账户、角色、区域均正确。此查询只证明凭据有效，不能证明所有创建权限都已具备；管理员还需完成下一节 IAM 授权。登录与 IAM 授权两项都完成后，才执行部署。
+
+### 4｜让后续部署使用同一个 profile
+
+按[部署指南](docs/DEPLOYMENT.md)创建飞书应用、下载工程并填写配置后，在包含 `package.json` 和 `config.local.json` 的工程目录执行：
+
+```bash
+npm run package
+npm run deploy -- --profile portal-deploy
+npm run outputs -- --profile portal-deploy
+```
+
+`npm run package` 只做本地打包；`deploy` 才创建／更新 AWS 资源。`--` 用于把后面的 `--profile` 传给项目脚本，不要删除。本项目会再次核对真实 AWS 账户与配置是否一致，并要求查看 SAM 变更集后确认部署。资料中旧的 `your-profile` 都应替换为这次验证通过的名字。
+
+部署后记录 `ApplicationUrl`、`ReportCallback` 和 `FeishuCallback`；它们与 profile 名称是不同的东西。以后更新应用仍使用同一账户、区域和资源栈，员工无需重复执行本节。
+
+### 登录卡住时，按现象处理
+
+| 现象 | 下一步 |
+|---|---|
+| `aws`／`sam`／`node` 命令找不到 | 完成对应安装，重开终端；WSL 用户确认工具也装在 WSL 内 |
+| `aws login` 显示无此命令 | 检查 `aws --version`，按官方安装方式更新到 AWS CLI v2 2.32.0 或以上 |
+| `The config profile ... could not be found` | 执行 `aws configure list-profiles` 检查拼写；若未配置，返回路线 A／B；不同电脑或系统用户不共用本机配置 |
+| `ExpiredToken`、SSO 会话过期 | 路线 A 重新 `aws sso login --profile portal-deploy`；路线 B 重新 `aws login --profile portal-console`，然后再运行身份查询 |
+| `Unable to locate credentials`／`CredentialsProviderError` | 确认同一终端、同一 profile；路线 B 检查是否完成 `credential_process` 配置，不打印缓存或密钥排查 |
+| `aws login` 阶段 `AccessDenied` | 管理员检查实际身份是否允许 `SignInLocalDevelopmentAccess` 及组织限制；这是登录权限问题 |
+| 身份查询成功，部署却 `AccessDenied` | 按错误中的 API 和资源 ARN 核对下一节部署 IAM 策略、权限边界／SCP；反复登录不会补齐部署权限 |
+| 浏览器选了正确账号，终端仍显示别的账号 | 检查指定的 profile 和企业凭据工具；重新走对应授权流程，再以身份查询结果为准 |
+| CLI 身份查询成功，但 Node／SAM 使用了另一身份 | 请管理员检查终端是否残留其他项目的 AWS 凭据环境变量、`AWS_CONFIG_FILE`／`AWS_SHARED_CREDENTIALS_FILE` 或自定义 endpoint；不要打印变量值或直接删除整个 `.aws` 目录 |
+| GitHub `Repository not found`／无权克隆 | 仓库是私有的，先接受访问邀请并完成 GitHub 身份验证；这不是 AWS IAM 错误 |
+
+以上登录方式依据 AWS 官方文档核对；本文未替你完成企业授权或在新的部署身份下执行部署。参考：[Identity Center SSO](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html)、[控制台身份本机登录与凭据兼容配置](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html)、[本机登录策略](https://docs.aws.amazon.com/aws-managed-policy/latest/reference/SignInLocalDevelopmentAccess.html)。
+
 ## 部署前：由管理员配置 AWS 权限
 
-**是的，部署所需的 AWS 权限主要通过 IAM 配置。**先确认本机 AWS profile 实际使用哪个 IAM 角色或用户，再由管理员给它授权；只登录 AWS 控制台不等于本机已经有部署权限。企业使用 IAM Identity Center（SSO）时，由管理员在相应权限集中配置并重新预置到目标 AWS 账户，部署人员再刷新登录会话。飞书应用权限、Keycloak 管理权限及 QuickSight 内的报表共享授权需分别配置。
+**部署所需的 AWS 权限主要通过 IAM 配置。**先确认本机 AWS profile 实际使用哪个 IAM 角色或用户，再由管理员给它授权；只登录 AWS 控制台不等于本机已经有部署权限。企业使用 IAM Identity Center（SSO）时，由管理员在相应权限集中配置并重新预置到目标 AWS 账户，部署人员再刷新登录会话。飞书应用权限、Keycloak 管理权限及 QuickSight 内的报表共享授权需分别配置。
 
 | 身份 | 谁来配置 | 用于什么 |
 |---|---|---|
@@ -54,7 +236,7 @@
 2. 管理员先准备好 `runtimeSecretArn` 指向的 Secrets Manager 密钥，内容见部署指南。以下策略允许部署解析该密钥，**不包含创建／修改密钥、创建 Cognito 客户端或开通 QuickSight 用户的管理权限**；这些准备工作由相应管理员完成。
 3. 展开下面的 JSON，替换所有占位值。IAM → 策略 → 创建策略 → JSON，粘贴并检查，命名为 `FeishuReportPortalDeployer`。
 4. IAM → 角色 → 目标部署角色 → 添加权限 → 附加策略，选择刚创建的策略。若企业使用 SSO，请通过权限集管理员配置，不直接改 IAM Identity Center 自动生成的角色。
-5. 部署人员刷新 AWS 登录，然后执行部署指南中的 `npm run deploy -- --profile your-profile`。IAM 策略不能越过组织 SCP、权限边界、会话策略或资源策略中的限制；有明确拒绝时应交由管理员核对。
+5. 部署人员刷新 AWS 登录，然后执行部署指南中的 `npm run deploy -- --profile portal-deploy`。IAM 策略不能越过组织 SCP、权限边界、会话策略或资源策略中的限制；有明确拒绝时应交由管理员核对。
 
 <details>
 <summary><strong>展开：首次部署／更新权限 JSON（先替换占位值，再由管理员审核）</strong></summary>
@@ -390,7 +572,7 @@ uvx iam-policy-autopilot@latest generate-policies scripts/deploy.mjs scripts/out
 
 ## 本地检查
 
-需要 Node.js 22.12+、npm；部署另需 AWS SAM CLI、Python 环境及可用的 AWS 凭据。
+需要 Node.js 22.12+、npm；部署另需 Git、AWS CLI v2、AWS SAM CLI，以及按上文验证通过的 AWS profile。工具安装与版本检查见“本机准备与 AWS 登录”。
 
 ```bash
 npm ci
