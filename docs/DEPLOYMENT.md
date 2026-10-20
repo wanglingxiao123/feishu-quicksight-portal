@@ -50,9 +50,13 @@ npm run secrets:generate
 ### 2.2 将秘密保存到 Secrets Manager
 
 1. 在本地编辑 `runtime-secret.local.json`，把 `FEISHU_APP_SECRET` 的占位内容换成步骤 1 的真实值；保留生成的 `SESSION_SECRET` 和 `ENROLLMENT_TOKEN`。
-2. AWS 控制台 → Secrets Manager → 存储新密钥 → 其他类型的密钥 → 纯文本。
-3. 由你本人将该文件的完整 JSON 存入密钥，三个键名保持不变。使用目标部署区域，首次可使用该服务的默认加密密钥。
-4. 保存后复制 **密钥 ARN**，填入 `config.local.json` 的 `runtimeSecretArn`。
+2. 先确认 QuickSight 所在区域，并将 `config.local.json` 的 `region` 填为该区域；AWS 控制台右上角也选择同一区域。例如 `us-east-1` 对应“美国（弗吉尼亚北部）”。其他环境应选择自己的实际区域，不照抄示例。
+3. 在控制台搜索 `Secrets Manager` →“存储新的密钥”→“其他类型的密钥”→“明文”。将该文件的完整 JSON 替换进编辑框，三个键名保持不变。加密密钥可保留 `aws/secretsmanager`；企业另有要求时按企业配置。点击“下一个”。
+4. 填写本应用专用名称，例如 `feishu-report-portal/runtime`；描述可选，其余保持默认，点击“下一个”。同名密钥已存在时先确认归属，不覆盖其他应用。
+5. “配置轮换”页保持“自动轮换”关闭，点击“下一个”；审核名称、密钥类型、加密密钥和“自动轮换：已禁用”，再点击页面底部“存储”。
+6. 打开已保存密钥的详情页，在“密钥详细信息”中复制 **密钥 ARN**，填入 `config.local.json` 的 `runtimeSecretArn`。复制的是 ARN，不是密钥名称，无需点击“检索密钥值”。
+
+**完成标志：**密钥已存在于目标区域，`runtimeSecretArn` 已填完整 ARN，ARN 中 `secretsmanager:` 后的区域代码与 `region` 一致。
 
 Agent 不需要检索密钥值。CloudFormation 用动态引用将秘密注入 Lambda；不得把秘密值写进配置模板、GitHub、日志或部署参数。更新 secret 本身不会保证现有 Lambda 环境立即更新；轮换时需规划函数配置更新，并注意 SESSION_SECRET 变化会使旧会话失效。
 
